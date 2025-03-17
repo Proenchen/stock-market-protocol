@@ -11,18 +11,6 @@ document.addEventListener("DOMContentLoaded", function () {
             highlightActivePage();
         })
         .catch(error => console.error(error));
-
-    /*fetch("assets/components/footer.html")
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`Footer failed to load: ${response.statusText}`);
-            }
-            return response.text();
-        })
-        .then(data => {
-            document.getElementById("footer-container").innerHTML = data;
-        })
-        .catch(error => console.error(error));*/
 });
 
 function highlightActivePage() {

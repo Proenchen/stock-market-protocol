@@ -14,31 +14,39 @@
 
     <div class="container">
         <h1>About</h1>
-        <p>Welcome to the Global Stock Market project page!</p>
+        <p>Welcome to the <b>Global Stock Market</b> project page!</p>
         <p>
             Researchers have identified over 500 different characteristics that influence the stock market
-            performance of firms. These anomalies often generate significant returns when used to
-            construct a portfolio strategy. However, the reproducibility and future performance of these
+            performance of companies. These anomalies often generate significant returns when used to
+            construct a portfolio strategy. However, the replicability and future performance of these
             strategies still remain as open questions. While the initial results appear promising, there are
             ongoing concerns about whether these strategies can continue to perform well over time,
             especially in different market conditions. Many authors have proposed frameworks to address
             these issues, aiming to make the results more robust and reliable. These frameworks typically
             focus on improving the testing and validation processes to ensure that the strategies remain
-            effective. Despite these advancements, the majority of studies and proposed frameworks have
-            been centered around the U.S. market [1], which is well-known and widely studied. This focus
-            on the U.S. market, however, overlooks the significant role played by other global markets,
-            which can exhibit different dynamics and behaviors that might impact the performance of
-            portfolio strategies. Therefore, there is a clear need for an open-access framework that enables
-            researchers to analyze and test portfolio strategies across a wider range of global stock
-            markets. Such a framework would provide valuable insights and allow researchers to better
-            understand the performance of these strategies in different international contexts, ultimately
-            enhancing the robustness of portfolio management research. This tool would contribute
-            to the academic community by offering a more comprehensive view of portfolio strategy
-            performance beyond just the U.S. market, supporting global research efforts in finance and
-            investment strategy development.
+            effective. However, most studies and proposed frameworks have primarily focused on the U.S. market,
+            neglecting the significant role of other global markets. These markets may have distinct dynamics and
+            behaviors that can influence the effectiveness of portfolio strategies.
         </p>
+        <p style="margin-bottom: 30px;">
+            This project introduces user-friendly tools to analyze and interpret newly
+            proposed factors that predict cross-sectional equity returns for global markets.
+            It allows users to test proposed new return predictors by simply uploading a .csv file.
+            After applying the protocol, the system emails the user a self-contained report that
+            describes the results.
+        </p>
+
+        <div class="d-flex align-items-center">
+            <p class="mb-1" style="margin-right: 15px;"><b>Upload your dataset to analyze stock market factors:</b></p>
+            <a href="/upload">
+                <button class="btn btn-primary">Upload CSV</button>
+            </a>
+        </div>
     </div>
 
+    <div class="footer">
+        <p>&copy; 2025 Global Stock Market Protocol by Julian Shen and Jiexuan Gao</p>
+    </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='js/loadComponents.js') }}"></script>
 </body>

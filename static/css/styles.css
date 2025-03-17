@@ -1,5 +1,11 @@
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;700&family=Open+Sans:wght@300;400;600&display=swap');
 
+html {
+    position: relative;
+    min-height: 100%;
+    padding-bottom: 80px;
+}
+
 body {
     background-color: #282c34 !important;
     font-family: 'Open Sans', sans-serif;
@@ -8,12 +14,49 @@ body {
     margin: 0;
     padding: 0;
     text-align: center;
+    margin-bottom: 80px;
 }
+
+.btn-primary {
+    background-color: #347c3c !important; 
+    color: #e0e0e0 !important; 
+    border: 1px solid #347c3c !important; 
+}
+
+.btn-primary:hover {
+    background-color: #408444 !important;
+    border-color: #408444 !important; 
+    color: #fff !important; 
+}
+
 
 .container {
     max-width: 900px;
     margin: 50px auto;
-    padding: 30px;
+    padding: 20px;
+}
+
+.footer {
+    text-align: center;
+    background-color: #282c34;
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    height: 60px;
+}
+
+.footer::before {
+    content: "";
+    padding: 10px 0;
+    display: block;
+    width: 75%;
+    margin: 0 auto;
+    border-top: 1px solid #444;
+}
+
+.footer p {
+    margin: 0;
+    font-size: 14px;
 }
 
 h1 {
