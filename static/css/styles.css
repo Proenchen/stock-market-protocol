@@ -102,6 +102,38 @@ p {
     justify-content: flex-start;
 }
 
+.nav-link.active {
+    font-weight: bold;
+}
+
+.dropdown-menu {
+    background-color: var(--base-variant) !important;
+    border-color: var(--border-color) !important;
+}
+
+.dropdown-item:hover {
+    background-color: var(--base-color) !important;
+}
+
+.dropdown-item:focus {
+    background-color: var(--base-variant) !important;
+    color: var(--text-color) !important;
+
+    &:hover {
+        background-color: var(--base-color) !important;
+    }
+}
+
+.dropdown-item.active {
+    background-color: var(--base-variant) !important;
+    color: var(--text-color) !important;
+    font-weight: bold;
+
+    &:hover {
+        background-color: var(--base-color) !important;
+    }
+}
+
 #theme-switch {
     height: 35px;
     width: 35px;
@@ -174,10 +206,6 @@ Light-Mode properties
 
 .lightmode .btn:hover {
     background-color: var(--accent-color-variant);
-}
-
-.nav-link.active {
-    font-weight: bold;
 }
 
 .lightmode #theme-switch {

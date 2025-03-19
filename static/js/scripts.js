@@ -6,18 +6,23 @@ document.addEventListener("DOMContentLoaded", function () {
 function highlightActivePage() {
     let currentPage = window.location.pathname.split("/").pop();
 
-    document.querySelectorAll(".nav-link").forEach(link => {
+    document.querySelectorAll(".nav-link, .dropdown-item").forEach(link => {
         let hrefAttribute = link.getAttribute("href");
-        if (hrefAttribute != null) {
+        if (hrefAttribute) {
             let targetPage = hrefAttribute.split("/").pop();
             if (targetPage === currentPage) {
                 link.classList.add("active");
+                let parentDropdown = link.closest(".dropdown");
+                if (parentDropdown) {
+                    parentDropdown.querySelector(".nav-link").classList.add("active");
+                }
             } else {
                 link.classList.remove("active");
             }
         }
     });
 }
+
 
 function initializeThemeSwitch() {
     const themeSwitch = document.getElementById('theme-switch');
