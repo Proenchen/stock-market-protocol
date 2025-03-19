@@ -1,5 +1,16 @@
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;700&family=Open+Sans:wght@300;400;600&display=swap');
 
+:root {
+    --base-color: #282c34;
+    --base-variant: #181c24;
+    --text-color: #e0e0e0;
+    --button-text-color: #e0e0e0;
+    --button-text-color-variant: white;
+    --accent-color: #347c3c;
+    --accent-color-variant: #408444;
+    --border-color: #444;
+}
+
 html {
     position: relative;
     min-height: 100%;
@@ -7,9 +18,9 @@ html {
 }
 
 body {
-    background-color: #282c34 !important;
+    background-color: var(--base-color) !important;
     font-family: 'Open Sans', sans-serif;
-    color: #e0e0e0 !important;
+    color: var(--text-color) !important;
     line-height: 1.8;
     margin: 0;
     padding: 0;
@@ -18,17 +29,16 @@ body {
 }
 
 .btn-primary {
-    background-color: #347c3c !important; 
-    color: #e0e0e0 !important; 
-    border: 1px solid #347c3c !important; 
+    background-color: var(--accent-color) !important;
+    color: var(--button-text-color) !important;
+    border: 1px solid var(--accent-color) !important;
 }
 
 .btn-primary:hover {
-    background-color: #408444 !important;
-    border-color: #408444 !important; 
-    color: #fff !important; 
+    background-color: var(--accent-color-variant) !important;
+    border-color: var(--accent-color-variant) !important;
+    color: var(--button-text-color-variant) !important;
 }
-
 
 .container {
     max-width: 900px;
@@ -38,7 +48,7 @@ body {
 
 .footer {
     text-align: center;
-    background-color: #282c34;
+    background-color: var(--base-color);
     position: absolute;
     bottom: 0;
     width: 100%;
@@ -51,7 +61,7 @@ body {
     display: block;
     width: 75%;
     margin: 0 auto;
-    border-top: 1px solid #444;
+    border-top: 1px solid var(--border-color);
 }
 
 .footer p {
@@ -69,24 +79,46 @@ h1 {
 p {
     font-size: 1.1rem;
     font-weight: 300;
-    color: #e0e0e0;
+    color: var(--text-color);
 }
 
 #navbar {
-    background-color: #181c24 !important;
+    background-color: var(--base-variant) !important;
     padding: 15px;
 }
 
 .navbar-brand {
     font-weight: 700;
     font-size: 1.5rem;
-    color: #e0e0e0 !important;
+    color: var(--text-color) !important;
 }
 
 .navbar-nav>li {
     margin-left: 10px;
     margin-right: 10px;
-    color: #e0e0e0 !important;
+    color: var(--text-color) !important;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+}
+
+#theme-switch {
+    height: 50px;
+    width: 50px;
+    padding: 0;
+    border-radius: 50%;
+    background-color: var(--base-variant);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#theme-switch svg {
+    fill: var(--text-color)
+}
+
+#theme-switch svg:first-child {
+    display: none;
 }
 
 @media (max-width: 768px) {
@@ -102,4 +134,68 @@ p {
     .nav-link {
         font-size: 1rem;
     }
+}
+
+
+/* 
+
+Light-Mode properties
+--------------------------
+
+*/
+
+.lightmode {
+    --base-color: white;
+    --base-variant: #f6f8fa;
+    --text-color: black;
+    --button-text-color: white;
+    --button-text-color-variant: white;
+    --accent-color: #2e7d32;
+    --accent-color-variant: #388e3c;
+    --border-color: #bbb;
+
+    background-color: var(--base-color);
+    color: var(--text-color);
+}
+
+.lightmode .navbar {
+    background-color: var(--base-variant) !important;
+    color: var(--text-color);
+}
+
+.lightmode .nav-link {
+    color: var(--text-color);
+}
+
+.lightmode .btn {
+    background-color: var(--accent-color);
+    border-color: var(--border-color);
+}
+
+.lightmode .btn:hover {
+    background-color: var(--accent-color-variant);
+}
+
+.nav-link.active {
+    font-weight: bold;
+}
+
+.lightmode #theme-switch {
+    height: 50px;
+    width: 50px;
+    padding: 0;
+    border-radius: 50%;
+    background-color: var(--base-variant);
+    border-color: var(--border-color);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.lightmode #theme-switch svg:last-child {
+    display: none;
+}
+
+.lightmode #theme-switch svg:first-child {
+    display: block;
 }

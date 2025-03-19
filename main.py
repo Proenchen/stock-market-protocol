@@ -1,6 +1,5 @@
 from flask import Flask, render_template, redirect, url_for
 
-
 app: Flask = Flask(__name__)
 
 @app.route("/")
@@ -14,6 +13,10 @@ def home():
 @app.route('/upload')
 def upload():
     return render_template('upload.html')
+
+@app.route('/contact')
+def contact():
+    return render_template('contact.html')
 
 @app.route('/navbar')
 def navbar():
