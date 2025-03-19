@@ -1,17 +1,6 @@
 document.addEventListener("DOMContentLoaded", function () {
-    fetch("/navbar")
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`Navbar failed to load: ${response.statusText}`);
-            }
-            return response.text();
-        })
-        .then(data => {
-            document.getElementById("navbar-container").innerHTML = data;
-            initializeThemeSwitch()
-            highlightActivePage();
-        })
-        .catch(error => console.error(error));
+    highlightActivePage();
+    initializeThemeSwitch();
 });
 
 function highlightActivePage() {
@@ -43,7 +32,7 @@ function initializeThemeSwitch() {
 
     const disableLightmode = () => {
         document.body.classList.remove('lightmode');
-        navbar.setAttribute("data-bs-theme", "dark"); 
+        navbar.setAttribute("data-bs-theme", "dark");
         localStorage.removeItem('lightmode');
     };
 
