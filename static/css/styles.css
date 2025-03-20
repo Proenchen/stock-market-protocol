@@ -19,7 +19,6 @@ html {
 
 body {
     background-color: var(--base-color) !important;
-    font-family: 'Open Sans', sans-serif;
     color: var(--text-color) !important;
     line-height: 1.8;
     margin: 0;
@@ -78,8 +77,17 @@ h1 {
 
 p {
     font-size: 1.1rem;
-    font-weight: 300;
+    font-weight: 350;
     color: var(--text-color);
+}
+
+ol {
+    font-weight: 350;
+    font-size: 1.1rem;
+}
+
+strong {
+    font-weight: 500 !important;
 }
 
 #navbar {
@@ -88,7 +96,7 @@ p {
 }
 
 .navbar-brand {
-    font-weight: 700;
+    font-weight: 500;
     font-size: 1.5rem;
     color: var(--text-color) !important;
 }
@@ -103,7 +111,7 @@ p {
 }
 
 .nav-link.active {
-    font-weight: bold;
+    font-weight: 550;
 }
 
 .dropdown-menu {
@@ -111,8 +119,17 @@ p {
     border-color: var(--border-color) !important;
 }
 
+.dropdown-toggle:focus {
+    font-weight: 550 !important;
+}
+
+.dropdown-item {
+    color: #97999c !important;
+}
+
 .dropdown-item:hover {
     background-color: var(--base-color) !important;
+    color: var(--text-color) !important;
 }
 
 .dropdown-item:focus {
@@ -127,11 +144,15 @@ p {
 .dropdown-item.active {
     background-color: var(--base-variant) !important;
     color: var(--text-color) !important;
-    font-weight: bold;
+    font-weight: 550 !important;
 
     &:hover {
         background-color: var(--base-color) !important;
     }
+}
+
+.dropdown-toggle::after {
+    margin-left: 10px !important;
 }
 
 #theme-switch {
@@ -199,6 +220,10 @@ Light-Mode properties
     color: var(--text-color);
 }
 
+.lightmode .nav-link:hover {
+    color: rgb(110, 110, 110);
+}
+
 .lightmode .btn {
     background-color: var(--accent-color);
     border-color: var(--border-color);
@@ -206,6 +231,38 @@ Light-Mode properties
 
 .lightmode .btn:hover {
     background-color: var(--accent-color-variant);
+}
+
+.lightmode .dropdown-menu {
+    background-color: var(--base-color) !important;
+    border-color: var(--border-color) !important;
+}
+
+.lightmode .dropdown-item {
+    color: black !important;
+}
+
+.lightmode .dropdown-item:hover {
+    background-color: var(--base-variant) !important;
+}
+
+.lightmode .dropdown-item:focus {
+    background-color: var(--base-color) !important;
+    color: var(--text-color) !important;
+
+    &:hover {
+        background-color: var(--base-variant) !important;
+    }
+}
+
+.lightmode .dropdown-item.active {
+    background-color: var(--base-color) !important;
+    color: var(--text-color) !important;
+    font-weight: bold;
+
+    &:hover {
+        background-color: var(--base-variant) !important;
+    }
 }
 
 .lightmode #theme-switch {
