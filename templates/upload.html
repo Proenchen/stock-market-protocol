@@ -76,6 +76,12 @@
                 </div>
             </div>
         </form>
+
+        {% if cell_value %}
+        <div class="mt-4">
+            <p>Content of Cell A1: {{ cell_value }}</p>
+        </div>
+        {% endif %}
     </div>
 
 
