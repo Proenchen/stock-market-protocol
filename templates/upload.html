@@ -7,7 +7,7 @@
     <title>Global Stock Market Protocol</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/common.js') }}"></script>
 </head>
 
 <body>
@@ -53,26 +53,37 @@
 
     <div class="container">
         <h1>Upload</h1>
-        <p>
+        <p style="margin-bottom: 30px;">
             This webpage provides a form for users to assess the robustness of a new predictive signal for
             cross-sectional stock returns. By uploading a .csv file with three columns firm identifier, date,
             and signal, users can initiate an automated analysis. The application then generates a comprehensive report
             evaluating the anomaly and emails the user both LaTeX files and a PDF version of the report.
         </p>
-        <p>The file needs to satisfy the following requirements:</p>
-        <ol>
-            <li>The first column should have CRSP permno identifiers and have “permno” as its header.</li>
-            <li>The second column should have dates in YYYYMM format and have “dates” as its header.</li>
-            <li>The third column should have values for the signal.</li>
-            <li>The tests require at least ten years of signal data.</li>
-            <li>The signal is assumed to to be signed to positively predict returns.</li>
-        </ol>
+
+        <form action="/upload_excel" method="POST" enctype="multipart/form-data">
+            <div class="row mb-3">
+                <div class="col-12">
+                    <div id="drop-zone">
+                        <p id="drop-text">Drag & Drop your Excel file here or click to upload</p>
+                        <p id="file-caption" style="font-size: 0.8rem; color: gray; margin-top: 7px;">Accepted file
+                            formats are: .xls, .xlsx, .xlsm, .csv</p>
+                        <input class="d-none" type="file" id="excel-file" name="excel-file"
+                            accept=".xlsx,.xls,.xlsm,.csv" required>
+                    </div>
+                </div>
+                <div class="col-12 mt-2 text-end">
+                    <button type="submit" class="btn btn-primary">Analyze file</button>
+                </div>
+            </div>
+        </form>
     </div>
+
 
     <div class="footer">
         <p>&copy; 2025 Global Stock Market Protocol by Julian Shen and Jiexuan Gao</p>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/excel-upload.js') }}"></script>
 </body>
 
 </html>

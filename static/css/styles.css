@@ -4,17 +4,18 @@
     --base-color: #282c34;
     --base-variant: #181c24;
     --text-color: #e0e0e0;
-    --button-text-color: #e0e0e0;
+    --button-text-color: white;
     --button-text-color-variant: white;
     --accent-color: #347c3c;
     --accent-color-variant: #408444;
     --border-color: #545454;
+    --form-uploaded-color: #2b3039;
 }
 
 html {
     position: relative;
     min-height: 100%;
-    padding-bottom: 80px;
+    padding-bottom: 60px;
 }
 
 body {
@@ -174,6 +175,33 @@ strong {
     display: none;
 }
 
+#drop-zone {
+    border: 1px solid var(--border-color);
+    background-color: var(--base-color);
+    cursor: pointer;
+    border-radius: 6px;
+    padding: 20px;
+    text-align: center;
+}
+
+#drop-zone p {
+    color: var(--text-color);
+    margin: 0;
+}
+
+#drop-zone.drag-over {
+    background-color: var(--form-uploaded-color);
+}
+
+#drop-zone.uploaded {
+    background-color: var(--form-uploaded-color);
+}
+
+#drop-text {
+    color: var(--text-color);
+    font-weight: 500;
+}
+
 @media (max-width: 768px) {
     .container {
         margin: 20px auto;
@@ -188,7 +216,6 @@ strong {
         font-size: 1rem;
     }
 }
-
 
 /* 
 
@@ -206,6 +233,7 @@ Light-Mode properties
     --accent-color: #2e7d32;
     --accent-color-variant: #388e3c;
     --border-color: #bbb;
+    --form-uploaded-color: #f8f8f8;
 
     background-color: var(--base-color);
     color: var(--text-color);
@@ -221,7 +249,7 @@ Light-Mode properties
 }
 
 .lightmode .nav-link:hover {
-    color: rgb(110, 110, 110);
+    color: rgb(90, 90, 90);
 }
 
 .lightmode .btn {
