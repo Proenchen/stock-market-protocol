@@ -189,6 +189,10 @@ strong {
     margin: 0;
 }
 
+#drop-zone:hover {
+    background-color: var(--form-uploaded-color);
+}
+
 #drop-zone.drag-over {
     background-color: var(--form-uploaded-color);
 }
@@ -198,6 +202,7 @@ strong {
 }
 
 #drop-text {
+    user-select: none;
     color: var(--text-color);
     font-weight: 500;
 }
