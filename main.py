@@ -2,7 +2,7 @@ import pandas as pd
 from flask import Flask, render_template, redirect, url_for, request
 from werkzeug.datastructures import FileStorage
 from typing import Optional
-
+from logic.strategy_analysis import SimpleAnalyzer
 
 app: Flask = Flask(__name__)
 
@@ -40,24 +40,21 @@ def navbar() -> str:
 
 @app.route('/upload_excel', methods=['GET', 'POST'])
 def upload_excel() -> str:
-    a1_value: Optional[str] = None
+    output: Optional[str] = None
     
     if request.method == 'POST':
         uploaded_file: FileStorage = request.files["excel-file"]
         
         if uploaded_file:
             try:
-                df: pd.DataFrame = pd.read_excel(uploaded_file, engine='openpyxl', header=None)
-                
-                if not df.empty:
-                    a1_value = str(df.iloc[0, 0])  
-                else:
-                    a1_value = None 
+                df = pd.read_excel(uploaded_file, engine='openpyxl')
+                analyzer = SimpleAnalyzer(df)
+                output = analyzer.analyze()
             
             except Exception as e:
-                a1_value = f"Error: {str(e)}"
+                output = f"Error: {str(e)}"
     
-    return render_template('upload.html', cell_value=a1_value)
+    return render_template('upload.html', output=output)
 
 
 if __name__ == "__main__": 

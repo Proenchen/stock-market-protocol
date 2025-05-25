@@ -77,9 +77,9 @@
             </div>
         </form>
 
-        {% if cell_value %}
-        <div class="mt-4">
-            <p>Content of Cell A1: {{ cell_value }}</p>
+        {% if output %}
+        <div class="mt-4" style="white-space: pre-line">
+            <p>{{ output }}</p>
         </div>
         {% endif %}
     </div>
