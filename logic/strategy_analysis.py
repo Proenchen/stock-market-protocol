@@ -60,7 +60,7 @@ class SimpleAnalyzer(BaseAnalyzer):
         
         df_signal['quintile'] = (
             df_signal.groupby('year_month')['signal']
-            .transform(lambda x: pd.qcut(x, 5, labels=False) + 1)
+            .transform(lambda x: pd.qcut(x, 5, labels=False, duplicates='drop') + 1)
         )
         
         df_signal['next_month'] = (df_signal['year_month'] + 1).dt.to_timestamp()
