@@ -1,5 +1,6 @@
 import pandas as pd
 from abc import ABC, abstractmethod
+from typing import Tuple
 
 
 class BaseAnalyzer(ABC):
@@ -33,7 +34,7 @@ class SimpleAnalyzer(BaseAnalyzer):
         """
         super().__init__(input_file)
 
-    def analyze(self) -> str:
+    def analyze(self) -> Tuple[str, str, str]:
         """
         Analyzes portfolio strategy by computing average next-month returns by quintile.
 
@@ -46,7 +47,10 @@ class SimpleAnalyzer(BaseAnalyzer):
         6. Returns a formatted string showing the average return by quintile.
 
         Returns:
-            str: A multiline string reporting the average next-month return for each signal quintile.
+            Tuple[str, str, str]: 
+                - First parameter: A multiline string reporting the average next-month return for each signal quintile.
+                - Second parameter: A multiline string reporting the monthly returns per quintile.
+                - Third parameter: A multiline string reporting the mapping of each stock to the respective quntile for every month.
         """
         df_signal = self.data
         df_return = pd.read_csv("./data/Industry_returns.csv")
@@ -80,8 +84,28 @@ class SimpleAnalyzer(BaseAnalyzer):
         
         avg_returns = portfolio_returns.groupby('quintile')['ret_usd'].mean()
         
-        result_str = "Durchschnittliche Folgemonatsrendite nach Signal-Quintilen:\n"
+
+        # Generate Output messages
+        # --------------------------
+        result_str = "Average next-month returns:\n" \
+                     "---------------------------\n"
         for quintile, avg_ret in avg_returns.items():
-            result_str += f"Quintil {quintile}: {avg_ret:.4f}\n"
+            result_str += f"Quintile {quintile}: {avg_ret:.4f}\n"
         
-        return result_str
+        monthly_avg = portfolio_returns.copy()
+        monthly_avg['year_month_x'] = monthly_avg['year_month_x'].astype(str)
+
+        monthly_avg_str = "Monthly Average Returns by Quintile:\n" \
+                          "------------------------------------\n"
+        for _, row in monthly_avg.iterrows():
+            monthly_avg_str += f"Month {row['year_month_x']}, Quintile {row['quintile']}: {row['ret_usd']:.4f}\n"
+
+
+        quintile_mapping = df_signal[['permno', 'year_month', 'quintile']].dropna().copy()
+        quintile_mapping['year_month'] = quintile_mapping['year_month'].astype(str)
+        mapping_str = "Quintile Mapping by Month:\n" \
+                      "--------------------------\n"
+        for _, row in quintile_mapping.iterrows():
+            mapping_str += f"permno {row['permno']}, month {row['year_month']}, quintile {row['quintile']}\n"
+
+        return result_str, monthly_avg_str, mapping_str

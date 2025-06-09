@@ -40,7 +40,7 @@ def navbar() -> str:
 
 @app.route('/upload_excel', methods=['GET', 'POST'])
 def upload_excel() -> str:
-    output: Optional[str] = None
+    analysis_result: Optional[str] = None
     
     if request.method == 'POST':
         uploaded_file: FileStorage = request.files["excel-file"]
@@ -49,12 +49,16 @@ def upload_excel() -> str:
             try:
                 df = pd.read_excel(uploaded_file, engine='openpyxl')
                 analyzer = SimpleAnalyzer(df)
-                output = analyzer.analyze()
+                analysis_result, monthly_avg_str, permno_mapping = analyzer.analyze()
             
             except Exception as e:
-                output = f"Error: {str(e)}"
+                analysis_result = f"Error: {str(e)}"
     
-    return render_template('upload.html', output=output)
+    return render_template('upload.html', 
+        result=analysis_result, 
+        monthly_avg=monthly_avg_str,
+        mapping=permno_mapping
+    )
 
 
 if __name__ == "__main__": 

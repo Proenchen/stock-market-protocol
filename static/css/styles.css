@@ -156,6 +156,32 @@ strong {
     margin-left: 10px !important;
 }
 
+body:not(.lightmode) .nav-tabs .nav-link {
+    color: var(--text-color) !important;
+}
+
+body:not(.lightmode) .nav-tabs .nav-link.active {
+    background-color: var(--base-color) !important;
+    color: var(--text-color) !important;
+    border-color: transparent !important;
+}
+
+body:not(.lightmode) .nav-tabs .nav-link:hover {
+    background-color: var(--base-color) !important;
+    border-color: transparent !important;
+}
+
+.card {
+    background-color: var(--base-color) !important;
+    color: var(--text-color) !important;
+    border-color: var(--border-color) !important;
+}
+
+.card-header {
+    background-color: var(--base-variant) !important; 
+    color: var(--text-color) !important;
+}
+
 #theme-switch {
     height: 35px;
     width: 35px;
@@ -296,6 +322,11 @@ Light-Mode properties
     &:hover {
         background-color: var(--base-variant) !important;
     }
+}
+
+.lightmode .card-header {
+    background-color: var(--base-variant); 
+    color: var(--text-color);
 }
 
 .lightmode #theme-switch {

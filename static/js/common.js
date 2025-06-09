@@ -4,13 +4,12 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 function highlightActivePage() {
-    let currentPage = window.location.pathname.split("/").pop();
+    let currentPath = window.location.pathname;
 
     document.querySelectorAll(".nav-link, .dropdown-item").forEach(link => {
         let hrefAttribute = link.getAttribute("href");
         if (hrefAttribute) {
-            let targetPage = hrefAttribute.split("/").pop();
-            if (targetPage === currentPage) {
+            if (currentPath.startsWith(hrefAttribute)) {
                 link.classList.add("active");
                 let parentDropdown = link.closest(".dropdown");
                 if (parentDropdown) {
