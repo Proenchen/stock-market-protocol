@@ -1,6 +1,7 @@
 import pandas as pd
+import statsmodels.api as sm
 from abc import ABC, abstractmethod
-from typing import Tuple
+from typing import Tuple, Any
 
 
 class BaseAnalyzer(ABC):
@@ -16,7 +17,7 @@ class BaseAnalyzer(ABC):
         self.data = input_file
 
     @abstractmethod
-    def analyze(self) -> str:
+    def analyze(self) -> Any:
         """
         Abstract method to perform analysis on the loaded data.
         """
@@ -109,3 +110,105 @@ class SimpleAnalyzer(BaseAnalyzer):
             mapping_str += f"permno {row['permno']}, month {row['year_month']}, quintile {row['quintile']}\n"
 
         return result_str, monthly_avg_str, mapping_str
+    
+
+class EqualWeightedFactorModelAnalyzer(BaseAnalyzer):
+    """
+    Analyzer that performs Fama-French (3, 5, Q-Factor) regressions on signal-based portfolios.
+    """
+
+    def __init__(self):
+
+        self.data = pd.read_csv("./data/ML_Predictions_Full.csv")
+        self.crsp = pd.read_csv("./data/dsws_crsp.csv")
+        self.factors = pd.read_csv("./data/Factors.csv")
+
+    def analyze(self) -> Tuple[str, str, str]:
+        """
+        Performs:
+        1. Merge signals with CRSP data.
+        2. Build equal-weighted portfolios (quintiles).
+        3. Calculate monthly portfolio returns.
+        4. Regress each quintile return on FF3, FF5, and Q-Factor models.
+
+        Returns:
+            Tuple of results for 3-factor, 5-factor, Q-factor models.
+        """
+        # Prepare signal data
+        df_signal = self.data.rename(columns={'DSCD': 'permno', 'DATE': 'date', 'ENSEMBLE_raw': 'signal'})
+        df_signal['date'] = pd.to_datetime(df_signal['date'])
+        df_signal['year_month'] = df_signal['date'].dt.to_period('M')
+
+        # Prepare CRSP data
+        df_crsp = self.crsp.rename(columns={'DSCD': 'permno', 'DATE': 'date'})
+        df_crsp['date'] = pd.to_datetime(df_crsp['date'])
+        df_crsp['year_month'] = df_crsp['date'].dt.to_period('M')
+
+        # Merge signals with CRSP
+        merged = pd.merge(df_signal, df_crsp, on=['permno', 'year_month'], how='inner')
+
+        # Build Quintiles
+        merged['quintile'] = (
+            merged.groupby('year_month')['signal']
+            .transform(lambda x: pd.qcut(x, 5, labels=False, duplicates='drop') + 1)
+        )
+
+        # Portfolio returns (equal-weighted)
+        port_returns = (
+            merged.groupby(['year_month', 'quintile'])['RET_USD']
+            .mean()
+            .reset_index()
+            .rename(columns={'RET_USD': 'port_ret'})
+        )
+        port_returns['year_month'] = port_returns['year_month'].astype('period[M]')
+
+        # Prepare factors
+        df_factors = self.factors.copy()
+        df_factors['DATE'] = pd.to_datetime(df_factors['DATE'])
+        df_factors['year_month'] = df_factors['DATE'].dt.to_period('M')
+        df_factors = df_factors.rename(columns={'MKTRF_usd': 'MKT', 'SMB_usd': 'SMB', 'HML_usd': 'HML',
+                                                'RMW_usd': 'RMW', 'CMA_usd': 'CMA', 'rf_ff': 'RF',
+                                                'ME_usd': 'SIZE', 'ROE_usd': 'ROE'})
+
+        # Merge portfolio returns with factor returns
+        model_data = pd.merge(port_returns, df_factors, on='year_month', how='inner')
+        model_data['excess_ret'] = model_data['port_ret'] - model_data['RF']
+
+        # Run regressions
+        results = {}
+        for q in sorted(model_data['quintile'].unique()):
+            subset = model_data[model_data['quintile'] == q]
+            
+            y = subset['excess_ret']
+            x_ff3 = sm.add_constant(subset[['MKT', 'SMB', 'HML']])
+            x_ff5 = sm.add_constant(subset[['MKT', 'SMB', 'HML', 'RMW', 'CMA']])
+            x_q = sm.add_constant(subset[['MKT', 'SIZE', 'CMA', 'ROE']])  # Use Q-Factor here if different
+
+            res_ff3 = sm.OLS(y, x_ff3).fit()
+            res_ff5 = sm.OLS(y, x_ff5).fit()
+            res_q = sm.OLS(y, x_q).fit()
+
+            results[q] = {
+                'FF3': res_ff3.summary().as_text(),
+                'FF5': res_ff5.summary().as_text(),
+                'Q': res_q.summary().as_text()
+            }
+
+        # Format return strings
+        ff3_str, ff5_str, q_str = "", "", ""
+        for q, res in results.items():
+            ff3_str += f"\n--- Quintile {q} ---\n{res['FF3']}\n"
+            ff5_str += f"\n--- Quintile {q} ---\n{res['FF5']}\n"
+            q_str += f"\n--- Quintile {q} ---\n{res['Q']}\n"
+
+        return ff3_str, ff5_str, q_str
+
+
+if __name__ == '__main__':
+    analyzer = EqualWeightedFactorModelAnalyzer()
+    ff3, ff5, q = analyzer.analyze()
+    print(ff3)
+    print("----------------------------------")
+    print(ff5)
+    print("----------------------------------")
+    print(q)
