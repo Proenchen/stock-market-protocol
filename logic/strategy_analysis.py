@@ -204,8 +204,102 @@ class EqualWeightedFactorModelAnalyzer(BaseAnalyzer):
         return ff3_str, ff5_str, q_str
 
 
+class ValueWeightedFactorModelAnalyzer:
+    """
+    Analyzer that performs Fama-French (3, 5, Q-Factor) regressions on value-weighted signal-based portfolios.
+    """
+
+    def __init__(self):
+        # Load all data
+        self.data = pd.read_csv("./data/ML_Predictions_Full.csv")
+        self.crsp = pd.read_csv("./data/dsws_crsp.csv")
+        self.factors = pd.read_csv("./data/Factors.csv")
+
+    def analyze(self) -> Tuple[str, str, str]:
+        # Prepare signal data
+        df_signal = self.data.rename(columns={'DSCD': 'permno', 'DATE': 'date', 'ENSEMBLE_raw': 'signal'})
+        df_signal['date'] = pd.to_datetime(df_signal['date'])
+        df_signal['year_month'] = df_signal['date'].dt.to_period('M')
+
+        # Prepare CRSP data
+        df_crsp = self.crsp.rename(columns={'DSCD': 'permno', 'DATE': 'date'})
+        df_crsp['date'] = pd.to_datetime(df_crsp['date'])
+        df_crsp['year_month'] = df_crsp['date'].dt.to_period('M')
+
+        # Merge signals with CRSP
+        merged = pd.merge(df_signal, df_crsp, on=['permno', 'year_month'], how='inner')
+
+        # Drop missing values in critical columns
+        merged = merged.dropna(subset=['signal', 'RET_USD', 'size_lag'])
+
+        # Create quintiles based on signal
+        merged['quintile'] = (
+            merged.groupby('year_month')['signal']
+            .transform(lambda x: pd.qcut(x, 5, labels=False, duplicates='drop') + 1)
+        )
+
+        # Ensure size_lag is numeric
+        merged['size_lag'] = pd.to_numeric(merged['size_lag'], errors='coerce')
+        merged = merged.dropna(subset=['size_lag'])
+
+        # Value-weighted return = Return * lagged market cap
+        merged['weighted_ret'] = merged['RET_USD'] * merged['size_lag']
+
+        # Aggregate portfolio returns (value-weighted)
+        port_returns = (
+            merged.groupby(['year_month', 'quintile']).agg(
+                total_ret=('weighted_ret', 'sum'),
+                total_size=('size_lag', 'sum')
+            ).reset_index()
+        )
+        port_returns['port_ret'] = port_returns['total_ret'] / port_returns['total_size']
+
+        # Prepare factor data
+        df_factors = self.factors.copy()
+        df_factors['DATE'] = pd.to_datetime(df_factors['DATE'])
+        df_factors['year_month'] = df_factors['DATE'].dt.to_period('M')
+        df_factors = df_factors.rename(columns={
+            'MKTRF_usd': 'MKT', 'SMB_usd': 'SMB', 'HML_usd': 'HML',
+            'RMW_usd': 'RMW', 'CMA_usd': 'CMA', 'rf_ff': 'RF',
+            'ME_usd': 'SIZE', 'ROE_usd': 'ROE'
+        })
+
+        # Merge portfolio returns with factor data
+        model_data = pd.merge(port_returns, df_factors, on='year_month', how='inner')
+        model_data['excess_ret'] = model_data['port_ret'] - model_data['RF']
+
+        # Run regressions per quintile
+        results = {}
+        for q in sorted(model_data['quintile'].unique()):
+            subset = model_data[model_data['quintile'] == q]
+
+            y = subset['excess_ret']
+            x_ff3 = sm.add_constant(subset[['MKT', 'SMB', 'HML']])
+            x_ff5 = sm.add_constant(subset[['MKT', 'SMB', 'HML', 'RMW', 'CMA']])
+            x_q = sm.add_constant(subset[['MKT', 'SIZE', 'CMA', 'ROE']])  # Q-Factor: MKT, SIZE, CMA, ROE
+
+            res_ff3 = sm.OLS(y, x_ff3).fit()
+            res_ff5 = sm.OLS(y, x_ff5).fit()
+            res_q = sm.OLS(y, x_q).fit()
+
+            results[q] = {
+                'FF3': res_ff3.summary().as_text(),
+                'FF5': res_ff5.summary().as_text(),
+                'Q': res_q.summary().as_text()
+            }
+
+        # Format results into strings
+        ff3_str, ff5_str, q_str = "", "", ""
+        for q, res in results.items():
+            ff3_str += f"\n--- Quintile {q} ---\n{res['FF3']}\n"
+            ff5_str += f"\n--- Quintile {q} ---\n{res['FF5']}\n"
+            q_str += f"\n--- Quintile {q} ---\n{res['Q']}\n"
+
+        return ff3_str, ff5_str, q_str
+    
+
 if __name__ == '__main__':
-    analyzer = EqualWeightedFactorModelAnalyzer()
+    analyzer = ValueWeightedFactorModelAnalyzer()
     ff3, ff5, q = analyzer.analyze()
     print(ff3)
     print("----------------------------------")
