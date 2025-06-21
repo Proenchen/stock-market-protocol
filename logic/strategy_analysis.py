@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import statsmodels.api as sm
 from abc import ABC, abstractmethod
@@ -296,13 +297,74 @@ class ValueWeightedFactorModelAnalyzer:
             q_str += f"\n--- Quintile {q} ---\n{res['Q']}\n"
 
         return ff3_str, ff5_str, q_str
+
+
+class FamaMacBethAnalyzer(BaseAnalyzer):
+    """
+    Performs Fama-MacBeth regression of returns on signals.
+    """
+
+    def __init__(self):
+        self.data = pd.read_csv("./data/ML_Predictions_Full.csv")
+        self.crsp = pd.read_csv("./data/dsws_crsp.csv")
+
+    def analyze(self) -> str:
+        # Merge signal and CRSP data
+        df_signal = self.data.rename(columns={'DSCD': 'permno', 'DATE': 'date', 'ENSEMBLE_raw': 'signal'})
+        df_crsp = self.crsp.rename(columns={'DSCD': 'permno', 'DATE': 'date'})
+
+        df_signal['date'] = pd.to_datetime(df_signal['date'])
+        df_crsp['date'] = pd.to_datetime(df_crsp['date'])
+
+        df_signal['year_month'] = df_signal['date'].dt.to_period('M')
+        df_crsp['year_month'] = df_crsp['date'].dt.to_period('M')
+
+        merged = pd.merge(df_signal, df_crsp, on=['permno', 'year_month'], how='inner')
+
+        # Drop rows with missing returns or signal
+        merged = merged.dropna(subset=['RET_USD', 'signal'])
+
+        # Store results
+        betas = []
+        dates = []
+
+        # First-stage: Run time-series of cross-sectional regressions
+        for date, group in merged.groupby('year_month'):
+            if group['signal'].nunique() > 1:  # Avoid perfect collinearity
+                X = sm.add_constant(group['signal'])
+                y = group['RET_USD']
+                res = sm.OLS(y, X).fit()
+                betas.append(res.params['signal'])
+                dates.append(date)
+
+        # Second-stage: average and t-test
+        betas_series = pd.Series(betas, index=pd.PeriodIndex(dates, freq='M'))
+        beta_mean = betas_series.mean()
+        beta_std = betas_series.std()
+        n = len(betas_series)
+        t_stat = beta_mean / (beta_std / np.sqrt(n))
+
+        result_str = "Fama-MacBeth Regression Result\n" \
+                     "------------------------------\n" \
+                     f"Mean Beta: {beta_mean:.4f}\n" \
+                     f"Std Dev:   {beta_std:.4f}\n" \
+                     f"T-Stat:    {t_stat:.4f}\n" \
+                     f"N Months:  {n}\n"
+
+        return result_str
     
 
+
 if __name__ == '__main__':
-    analyzer = ValueWeightedFactorModelAnalyzer()
-    ff3, ff5, q = analyzer.analyze()
-    print(ff3)
-    print("----------------------------------")
-    print(ff5)
-    print("----------------------------------")
-    print(q)
+
+    #analyzer = ValueWeightedFactorModelAnalyzer()
+    #ff3, ff5, q = analyzer.analyze()
+    #print(ff3)
+    #print("----------------------------------")
+    #print(ff5)
+    #print("----------------------------------")
+    #print(q)
+
+    analyzer = FamaMacBethAnalyzer()
+    result = analyzer.analyze()
+    print(result)
