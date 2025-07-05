@@ -5,6 +5,14 @@ from abc import ABC, abstractmethod
 from typing import Tuple, Any
 
 
+# Constants
+#------------------
+
+NUM_OF_SLICES = 10
+
+#------------------
+
+
 class BaseAnalyzer(ABC):
     """Implements an abstract analyzer for stock return predictors."""
 
@@ -38,24 +46,24 @@ class SimpleAnalyzer(BaseAnalyzer):
 
     def analyze(self) -> Tuple[str, str, str]:
         """
-        Analyzes portfolio strategy by computing average next-month returns by quintile.
+        Analyzes portfolio strategy by computing average next-month returns by slices.
 
         This method performs the following steps:
         1. Loads industry return data and given signal data.
         2. Prepares and formats both the signal and return datasets.
-        3. Assigns each stock to a signal-based quintile per month.
+        3. Assigns each stock to a signal-based slice per month.
         4. Merges the signal data with the return data, aligning each stock's signal with its return in the following month.
-        5. Calculates the average next-month return for each quintile.
-        6. Returns a formatted string showing the average return by quintile.
+        5. Calculates the average next-month return for each slice.
+        6. Returns a formatted string showing the average return by slice.
 
         Returns:
             Tuple[str, str, str]: 
-                - First parameter: A multiline string reporting the average next-month return for each signal quintile.
-                - Second parameter: A multiline string reporting the monthly returns per quintile.
+                - First parameter: A multiline string reporting the average next-month return for each signal slice.
+                - Second parameter: A multiline string reporting the monthly returns per slice.
                 - Third parameter: A multiline string reporting the mapping of each stock to the respective quntile for every month.
         """
-        df_signal = self.data
-        df_return = pd.read_csv("./data/Industry_returns.csv")
+        df_signal = pd.read_csv("./data/ML_Predictions_Full.csv")
+        df_return = pd.read_csv("./data/dsws_crsp.csv")
         
         df_signal.rename(columns={'permno': 'permno', 'date': 'date', 'signal': 'signal'}, inplace=True)
         df_return.rename(columns={'DSCD': 'permno', 'DATE': 'date', 'RET_USD': 'ret_usd'}, inplace=True)
@@ -64,9 +72,9 @@ class SimpleAnalyzer(BaseAnalyzer):
         df_return['date'] = pd.to_datetime(df_return['date'])
         df_signal['year_month'] = df_signal['date'].dt.to_period('M')
         
-        df_signal['quintile'] = (
+        df_signal['slice'] = (
             df_signal.groupby('year_month')['signal']
-            .transform(lambda x: pd.qcut(x, 5, labels=False, duplicates='drop') + 1)
+            .transform(lambda x: pd.qcut(x, NUM_OF_SLICES, labels=False, duplicates='drop') + 1)
         )
         
         df_signal['next_month'] = (df_signal['year_month'] + 1).dt.to_timestamp()
@@ -82,33 +90,33 @@ class SimpleAnalyzer(BaseAnalyzer):
         
         merged = pd.merge(df_signal, df_return, left_on=['permno', 'next_month'], right_on=['permno', 'date'], how='inner')
         
-        portfolio_returns = merged.groupby(['year_month_x', 'quintile'])['ret_usd'].mean().reset_index()
+        portfolio_returns = merged.groupby(['year_month_x', 'slice'])['ret_usd'].mean().reset_index()
         
-        avg_returns = portfolio_returns.groupby('quintile')['ret_usd'].mean()
+        avg_returns = portfolio_returns.groupby('slice')['ret_usd'].mean()
         
 
         # Generate Output messages
         # --------------------------
         result_str = "Average next-month returns:\n" \
                      "---------------------------\n"
-        for quintile, avg_ret in avg_returns.items():
-            result_str += f"Quintile {quintile}: {avg_ret:.4f}\n"
+        for slice, avg_ret in avg_returns.items():
+            result_str += f"Slice {slice}: {avg_ret:.4f}\n"
         
         monthly_avg = portfolio_returns.copy()
         monthly_avg['year_month_x'] = monthly_avg['year_month_x'].astype(str)
 
-        monthly_avg_str = "Monthly Average Returns by Quintile:\n" \
+        monthly_avg_str = "Monthly Average Returns by Slices:\n" \
                           "------------------------------------\n"
         for _, row in monthly_avg.iterrows():
-            monthly_avg_str += f"Month {row['year_month_x']}, Quintile {row['quintile']}: {row['ret_usd']:.4f}\n"
+            monthly_avg_str += f"Month {row['year_month_x']}, Slice {row['slice']}: {row['ret_usd']:.4f}\n"
 
 
-        quintile_mapping = df_signal[['permno', 'year_month', 'quintile']].dropna().copy()
-        quintile_mapping['year_month'] = quintile_mapping['year_month'].astype(str)
-        mapping_str = "Quintile Mapping by Month:\n" \
+        slice_mapping = df_signal[['permno', 'year_month', 'slice']].dropna().copy()
+        slice_mapping['year_month'] = slice_mapping['year_month'].astype(str)
+        mapping_str = "Slice Mapping by Month:\n" \
                       "--------------------------\n"
-        for _, row in quintile_mapping.iterrows():
-            mapping_str += f"permno {row['permno']}, month {row['year_month']}, quintile {row['quintile']}\n"
+        for _, row in slice_mapping.iterrows():
+            mapping_str += f"permno {row['permno']}, month {row['year_month']}, slice {row['slice']}\n"
 
         return result_str, monthly_avg_str, mapping_str
     
@@ -128,9 +136,9 @@ class EqualWeightedFactorModelAnalyzer(BaseAnalyzer):
         """
         Performs:
         1. Merge signals with CRSP data.
-        2. Build equal-weighted portfolios (quintiles).
+        2. Build equal-weighted portfolios.
         3. Calculate monthly portfolio returns.
-        4. Regress each quintile return on FF3, FF5, and Q-Factor models.
+        4. Regress each slice return on FF3, FF5, and Q-Factor models.
 
         Returns:
             Tuple of results for 3-factor, 5-factor, Q-factor models.
@@ -148,15 +156,15 @@ class EqualWeightedFactorModelAnalyzer(BaseAnalyzer):
         # Merge signals with CRSP
         merged = pd.merge(df_signal, df_crsp, on=['permno', 'year_month'], how='inner')
 
-        # Build Quintiles
-        merged['quintile'] = (
+        # Create slices based on signal
+        merged['slice'] = (
             merged.groupby('year_month')['signal']
-            .transform(lambda x: pd.qcut(x, 5, labels=False, duplicates='drop') + 1)
+            .transform(lambda x: pd.qcut(x, NUM_OF_SLICES, labels=False, duplicates='drop') + 1)
         )
 
         # Portfolio returns (equal-weighted)
         port_returns = (
-            merged.groupby(['year_month', 'quintile'])['RET_USD']
+            merged.groupby(['year_month', 'slice'])['RET_USD']
             .mean()
             .reset_index()
             .rename(columns={'RET_USD': 'port_ret'})
@@ -169,7 +177,7 @@ class EqualWeightedFactorModelAnalyzer(BaseAnalyzer):
         df_factors['year_month'] = df_factors['DATE'].dt.to_period('M')
         df_factors = df_factors.rename(columns={'MKTRF_usd': 'MKT', 'SMB_usd': 'SMB', 'HML_usd': 'HML',
                                                 'RMW_usd': 'RMW', 'CMA_usd': 'CMA', 'rf_ff': 'RF',
-                                                'ME_usd': 'SIZE', 'ROE_usd': 'ROE'})
+                                                'ME_usd': 'SIZE', 'ROE_usd': 'ROE', 'IA_usd': 'IA'})
 
         # Merge portfolio returns with factor returns
         model_data = pd.merge(port_returns, df_factors, on='year_month', how='inner')
@@ -177,13 +185,13 @@ class EqualWeightedFactorModelAnalyzer(BaseAnalyzer):
 
         # Run regressions
         results = {}
-        for q in sorted(model_data['quintile'].unique()):
-            subset = model_data[model_data['quintile'] == q]
+        for q in sorted(model_data['slice'].unique()):
+            subset = model_data[model_data['slice'] == q]
             
             y = subset['excess_ret']
             x_ff3 = sm.add_constant(subset[['MKT', 'SMB', 'HML']])
             x_ff5 = sm.add_constant(subset[['MKT', 'SMB', 'HML', 'RMW', 'CMA']])
-            x_q = sm.add_constant(subset[['MKT', 'SIZE', 'CMA', 'ROE']])  # Use Q-Factor here if different
+            x_q = sm.add_constant(subset[['MKT', 'SIZE', 'IA', 'ROE']]) 
 
             res_ff3 = sm.OLS(y, x_ff3).fit()
             res_ff5 = sm.OLS(y, x_ff5).fit()
@@ -198,9 +206,9 @@ class EqualWeightedFactorModelAnalyzer(BaseAnalyzer):
         # Format return strings
         ff3_str, ff5_str, q_str = "", "", ""
         for q, res in results.items():
-            ff3_str += f"\n--- Quintile {q} ---\n{res['FF3']}\n"
-            ff5_str += f"\n--- Quintile {q} ---\n{res['FF5']}\n"
-            q_str += f"\n--- Quintile {q} ---\n{res['Q']}\n"
+            ff3_str += f"\n--- Slice {q} ---\n{res['FF3']}\n"
+            ff5_str += f"\n--- Slice {q} ---\n{res['FF5']}\n"
+            q_str += f"\n--- Slice {q} ---\n{res['Q']}\n"
 
         return ff3_str, ff5_str, q_str
 
@@ -233,10 +241,10 @@ class ValueWeightedFactorModelAnalyzer:
         # Drop missing values in critical columns
         merged = merged.dropna(subset=['signal', 'RET_USD', 'size_lag'])
 
-        # Create quintiles based on signal
-        merged['quintile'] = (
+        # Create slices based on signal
+        merged['slice'] = (
             merged.groupby('year_month')['signal']
-            .transform(lambda x: pd.qcut(x, 5, labels=False, duplicates='drop') + 1)
+            .transform(lambda x: pd.qcut(x, NUM_OF_SLICES, labels=False, duplicates='drop') + 1)
         )
 
         # Ensure size_lag is numeric
@@ -248,7 +256,7 @@ class ValueWeightedFactorModelAnalyzer:
 
         # Aggregate portfolio returns (value-weighted)
         port_returns = (
-            merged.groupby(['year_month', 'quintile']).agg(
+            merged.groupby(['year_month', 'slice']).agg(
                 total_ret=('weighted_ret', 'sum'),
                 total_size=('size_lag', 'sum')
             ).reset_index()
@@ -262,22 +270,22 @@ class ValueWeightedFactorModelAnalyzer:
         df_factors = df_factors.rename(columns={
             'MKTRF_usd': 'MKT', 'SMB_usd': 'SMB', 'HML_usd': 'HML',
             'RMW_usd': 'RMW', 'CMA_usd': 'CMA', 'rf_ff': 'RF',
-            'ME_usd': 'SIZE', 'ROE_usd': 'ROE'
+            'ME_usd': 'SIZE', 'ROE_usd': 'ROE', 'IA_usd': 'IA'
         })
 
         # Merge portfolio returns with factor data
         model_data = pd.merge(port_returns, df_factors, on='year_month', how='inner')
         model_data['excess_ret'] = model_data['port_ret'] - model_data['RF']
 
-        # Run regressions per quintile
+        # Run regressions per slice
         results = {}
-        for q in sorted(model_data['quintile'].unique()):
-            subset = model_data[model_data['quintile'] == q]
+        for q in sorted(model_data['slice'].unique()):
+            subset = model_data[model_data['slice'] == q]
 
             y = subset['excess_ret']
             x_ff3 = sm.add_constant(subset[['MKT', 'SMB', 'HML']])
             x_ff5 = sm.add_constant(subset[['MKT', 'SMB', 'HML', 'RMW', 'CMA']])
-            x_q = sm.add_constant(subset[['MKT', 'SIZE', 'CMA', 'ROE']])  # Q-Factor: MKT, SIZE, CMA, ROE
+            x_q = sm.add_constant(subset[['MKT', 'SIZE', 'IA', 'ROE']]) 
 
             res_ff3 = sm.OLS(y, x_ff3).fit()
             res_ff5 = sm.OLS(y, x_ff5).fit()
@@ -292,9 +300,9 @@ class ValueWeightedFactorModelAnalyzer:
         # Format results into strings
         ff3_str, ff5_str, q_str = "", "", ""
         for q, res in results.items():
-            ff3_str += f"\n--- Quintile {q} ---\n{res['FF3']}\n"
-            ff5_str += f"\n--- Quintile {q} ---\n{res['FF5']}\n"
-            q_str += f"\n--- Quintile {q} ---\n{res['Q']}\n"
+            ff3_str += f"\n--- Slice {q} ---\n{res['FF3']}\n"
+            ff5_str += f"\n--- Slice {q} ---\n{res['FF5']}\n"
+            q_str += f"\n--- Slice {q} ---\n{res['Q']}\n"
 
         return ff3_str, ff5_str, q_str
 
@@ -357,14 +365,19 @@ class FamaMacBethAnalyzer(BaseAnalyzer):
 
 if __name__ == '__main__':
 
-    #analyzer = ValueWeightedFactorModelAnalyzer()
-    #ff3, ff5, q = analyzer.analyze()
-    #print(ff3)
-    #print("----------------------------------")
-    #print(ff5)
-    #print("----------------------------------")
-    #print(q)
+    analyzer = ValueWeightedFactorModelAnalyzer()
+    ff3, ff5, q = analyzer.analyze()
 
-    analyzer = FamaMacBethAnalyzer()
-    result = analyzer.analyze()
-    print(result)
+    # WRITE IN FILES TO GET COMPLETE OUTPUT!
+    with open("ff3_output.txt", "w") as f:
+        f.write(ff3)
+
+    with open("ff5_output.txt", "w") as f:
+        f.write(ff5)
+
+    with open("q_output.txt", "w") as f:
+        f.write(q)
+
+    #analyzer = FamaMacBethAnalyzer()
+    #result = analyzer.analyze()
+    #print(result)
