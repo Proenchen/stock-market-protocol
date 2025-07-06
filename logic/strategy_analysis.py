@@ -25,6 +25,38 @@ class BaseAnalyzer(ABC):
         """
         self.data = input_file
 
+    def compute_long_short_regression(self, port_returns: pd.DataFrame, df_factors: pd.DataFrame) -> str:
+        """
+        Computes long-short portfolio (Slice 10 - Slice 1) returns and regresses on FF3, FF5, Q models.
+        """
+        pivot = port_returns.pivot(index='year_month', columns='slice', values='port_ret')
+
+        if 1 not in pivot.columns or 10 not in pivot.columns:
+            return "Long-Short regression skipped: Slice 1 or 10 not found."
+
+        # Caluclate Long-short: High - Low
+        pivot['long_short'] = pivot[10] - pivot[1]
+        ls_returns = pivot[['long_short']].reset_index()
+
+        df = pd.merge(ls_returns, df_factors, on='year_month', how='inner')
+        df['excess_ret'] = df['long_short'] - df['RF']
+
+        y = df['excess_ret']
+        x_ff3 = sm.add_constant(df[['MKT', 'SMB', 'HML']])
+        x_ff5 = sm.add_constant(df[['MKT', 'SMB', 'HML', 'RMW', 'CMA']])
+        x_q   = sm.add_constant(df[['MKT', 'SIZE', 'IA', 'ROE']])
+
+        res_ff3 = sm.OLS(y, x_ff3).fit()
+        res_ff5 = sm.OLS(y, x_ff5).fit()
+        res_q   = sm.OLS(y, x_q).fit()
+
+        result = "\n======= Long-Short Portfolio (Slice 10 - Slice 1) =======\n"
+        result += "\n--- FF3 Regression ---\n" + res_ff3.summary().as_text()
+        result += "\n\n--- FF5 Regression ---\n" + res_ff5.summary().as_text()
+        result += "\n\n--- Q-Factor Regression ---\n" + res_q.summary().as_text()
+
+        return result
+
     @abstractmethod
     def analyze(self) -> Any:
         """
@@ -60,7 +92,7 @@ class SimpleAnalyzer(BaseAnalyzer):
             Tuple[str, str, str]: 
                 - First parameter: A multiline string reporting the average next-month return for each signal slice.
                 - Second parameter: A multiline string reporting the monthly returns per slice.
-                - Third parameter: A multiline string reporting the mapping of each stock to the respective quntile for every month.
+                - Third parameter: A multiline string reporting the mapping of each stock to the respective slice for every month.
         """
         df_signal = pd.read_csv("./data/ML_Predictions_Full.csv")
         df_return = pd.read_csv("./data/dsws_crsp.csv")
@@ -132,16 +164,16 @@ class EqualWeightedFactorModelAnalyzer(BaseAnalyzer):
         self.crsp = pd.read_csv("./data/dsws_crsp.csv")
         self.factors = pd.read_csv("./data/Factors.csv")
 
-    def analyze(self) -> Tuple[str, str, str]:
+    def analyze(self) -> Tuple[str, str, str, str]:
         """
         Performs:
         1. Merge signals with CRSP data.
         2. Build equal-weighted portfolios.
         3. Calculate monthly portfolio returns.
-        4. Regress each slice return on FF3, FF5, and Q-Factor models.
+        4. Regress each slice return on FF3, FF5, and Q-Factor models. Also perform an analysis on a long-short portfolio.
 
         Returns:
-            Tuple of results for 3-factor, 5-factor, Q-factor models.
+            Tuple of results for 3-factor, 5-factor, Q-factor models and the long-short analysis.
         """
         # Prepare signal data
         df_signal = self.data.rename(columns={'DSCD': 'permno', 'DATE': 'date', 'ENSEMBLE_raw': 'signal'})
@@ -204,16 +236,18 @@ class EqualWeightedFactorModelAnalyzer(BaseAnalyzer):
             }
 
         # Format return strings
-        ff3_str, ff5_str, q_str = "", "", ""
+        ff3_str, ff5_str, q_str, long_short_str = "", "", "", ""
         for q, res in results.items():
             ff3_str += f"\n--- Slice {q} ---\n{res['FF3']}\n"
             ff5_str += f"\n--- Slice {q} ---\n{res['FF5']}\n"
             q_str += f"\n--- Slice {q} ---\n{res['Q']}\n"
 
-        return ff3_str, ff5_str, q_str
+        long_short_str = self.compute_long_short_regression(port_returns, df_factors)
+
+        return ff3_str, ff5_str, q_str, long_short_str
 
 
-class ValueWeightedFactorModelAnalyzer:
+class ValueWeightedFactorModelAnalyzer(BaseAnalyzer):
     """
     Analyzer that performs Fama-French (3, 5, Q-Factor) regressions on value-weighted signal-based portfolios.
     """
@@ -224,7 +258,7 @@ class ValueWeightedFactorModelAnalyzer:
         self.crsp = pd.read_csv("./data/dsws_crsp.csv")
         self.factors = pd.read_csv("./data/Factors.csv")
 
-    def analyze(self) -> Tuple[str, str, str]:
+    def analyze(self) -> Tuple[str, str, str, str]:
         # Prepare signal data
         df_signal = self.data.rename(columns={'DSCD': 'permno', 'DATE': 'date', 'ENSEMBLE_raw': 'signal'})
         df_signal['date'] = pd.to_datetime(df_signal['date'])
@@ -298,13 +332,15 @@ class ValueWeightedFactorModelAnalyzer:
             }
 
         # Format results into strings
-        ff3_str, ff5_str, q_str = "", "", ""
+        ff3_str, ff5_str, q_str, long_short_str = "", "", "", ""
         for q, res in results.items():
             ff3_str += f"\n--- Slice {q} ---\n{res['FF3']}\n"
             ff5_str += f"\n--- Slice {q} ---\n{res['FF5']}\n"
             q_str += f"\n--- Slice {q} ---\n{res['Q']}\n"
 
-        return ff3_str, ff5_str, q_str
+        long_short_str = self.compute_long_short_regression(port_returns, df_factors)
+
+        return ff3_str, ff5_str, q_str, long_short_str
 
 
 class FamaMacBethAnalyzer(BaseAnalyzer):
@@ -365,8 +401,8 @@ class FamaMacBethAnalyzer(BaseAnalyzer):
 
 if __name__ == '__main__':
 
-    analyzer = ValueWeightedFactorModelAnalyzer()
-    ff3, ff5, q = analyzer.analyze()
+    analyzer = EqualWeightedFactorModelAnalyzer()
+    ff3, ff5, q, long_short = analyzer.analyze()
 
     # WRITE IN FILES TO GET COMPLETE OUTPUT!
     with open("ff3_output.txt", "w") as f:
@@ -377,6 +413,9 @@ if __name__ == '__main__':
 
     with open("q_output.txt", "w") as f:
         f.write(q)
+
+    with open("long_short_output.txt", "w") as f:
+        f.write(long_short)
 
     #analyzer = FamaMacBethAnalyzer()
     #result = analyzer.analyze()
