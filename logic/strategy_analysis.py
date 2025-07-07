@@ -24,6 +24,8 @@ class BaseAnalyzer(ABC):
                                        which contains data corresponding to the portfolio strategy.
         """
         self.data = input_file
+        self.crsp = pd.read_csv("./data/dsws_crsp.csv")
+        self.factors = pd.read_csv("./data/Factors.csv")
 
     def compute_long_short_regression(self, port_returns: pd.DataFrame, df_factors: pd.DataFrame) -> str:
         """
@@ -56,6 +58,18 @@ class BaseAnalyzer(ABC):
         result += "\n\n--- Q-Factor Regression ---\n" + res_q.summary().as_text()
 
         return result
+    
+    def prepare_signal_df(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Standardize a 3-column input DataFrame to columns: permno, date, signal.
+        """
+        if df.shape[1] != 3:
+            raise ValueError("Input data must have exactly 3 columns: DSCD, DATE, SIGNAL.")
+        df_signal = df.copy()
+        df_signal.columns = ['permno', 'date', 'signal']
+        df_signal['date'] = pd.to_datetime(df_signal['date'])
+        df_signal['year_month'] = df_signal['date'].dt.to_period('M')
+        return df_signal
 
     @abstractmethod
     def analyze(self) -> Any:
@@ -66,15 +80,6 @@ class BaseAnalyzer(ABC):
 
 
 class SimpleAnalyzer(BaseAnalyzer):
-
-    def __init__(self, input_file: pd.DataFrame):
-        """Creates a new analyzer which performs a simple analysis.
-        
-        Args:
-            input_file (pd.DataFrame): Data frame of the input file (.csv or .xlsx) 
-                                       which contains data corresponding to the portfolio strategy.
-        """
-        super().__init__(input_file)
 
     def analyze(self) -> Tuple[str, str, str]:
         """
@@ -94,11 +99,8 @@ class SimpleAnalyzer(BaseAnalyzer):
                 - Second parameter: A multiline string reporting the monthly returns per slice.
                 - Third parameter: A multiline string reporting the mapping of each stock to the respective slice for every month.
         """
-        df_signal = pd.read_csv("./data/ML_Predictions_Full.csv")
-        df_return = pd.read_csv("./data/dsws_crsp.csv")
-        
-        df_signal.rename(columns={'permno': 'permno', 'date': 'date', 'signal': 'signal'}, inplace=True)
-        df_return.rename(columns={'DSCD': 'permno', 'DATE': 'date', 'RET_USD': 'ret_usd'}, inplace=True)
+        df_signal = self.prepare_signal_df(self.data)
+        df_return = self.crsp.rename(columns={'DSCD': 'permno', 'DATE': 'date', 'RET_USD': 'ret_usd'}, inplace=True)
         
         df_signal['date'] = pd.to_datetime(df_signal['date'])
         df_return['date'] = pd.to_datetime(df_return['date'])
@@ -158,12 +160,6 @@ class EqualWeightedFactorModelAnalyzer(BaseAnalyzer):
     Analyzer that performs Fama-French (3, 5, Q-Factor) regressions on signal-based portfolios.
     """
 
-    def __init__(self):
-
-        self.data = pd.read_csv("./data/ML_Predictions_Full.csv")
-        self.crsp = pd.read_csv("./data/dsws_crsp.csv")
-        self.factors = pd.read_csv("./data/Factors.csv")
-
     def analyze(self) -> Tuple[str, str, str, str]:
         """
         Performs:
@@ -176,7 +172,7 @@ class EqualWeightedFactorModelAnalyzer(BaseAnalyzer):
             Tuple of results for 3-factor, 5-factor, Q-factor models and the long-short analysis.
         """
         # Prepare signal data
-        df_signal = self.data.rename(columns={'DSCD': 'permno', 'DATE': 'date', 'ENSEMBLE_raw': 'signal'})
+        df_signal = self.prepare_signal_df(self.data)
         df_signal['date'] = pd.to_datetime(df_signal['date'])
         df_signal['year_month'] = df_signal['date'].dt.to_period('M')
 
@@ -252,15 +248,9 @@ class ValueWeightedFactorModelAnalyzer(BaseAnalyzer):
     Analyzer that performs Fama-French (3, 5, Q-Factor) regressions on value-weighted signal-based portfolios.
     """
 
-    def __init__(self):
-        # Load all data
-        self.data = pd.read_csv("./data/ML_Predictions_Full.csv")
-        self.crsp = pd.read_csv("./data/dsws_crsp.csv")
-        self.factors = pd.read_csv("./data/Factors.csv")
-
     def analyze(self) -> Tuple[str, str, str, str]:
         # Prepare signal data
-        df_signal = self.data.rename(columns={'DSCD': 'permno', 'DATE': 'date', 'ENSEMBLE_raw': 'signal'})
+        df_signal = self.prepare_signal_df(self.data)
         df_signal['date'] = pd.to_datetime(df_signal['date'])
         df_signal['year_month'] = df_signal['date'].dt.to_period('M')
 
@@ -348,13 +338,9 @@ class FamaMacBethAnalyzer(BaseAnalyzer):
     Performs Fama-MacBeth regression of returns on signals.
     """
 
-    def __init__(self):
-        self.data = pd.read_csv("./data/ML_Predictions_Full.csv")
-        self.crsp = pd.read_csv("./data/dsws_crsp.csv")
-
     def analyze(self) -> str:
         # Merge signal and CRSP data
-        df_signal = self.data.rename(columns={'DSCD': 'permno', 'DATE': 'date', 'ENSEMBLE_raw': 'signal'})
+        df_signal = self.prepare_signal_df(self.data)
         df_crsp = self.crsp.rename(columns={'DSCD': 'permno', 'DATE': 'date'})
 
         df_signal['date'] = pd.to_datetime(df_signal['date'])
@@ -396,27 +382,3 @@ class FamaMacBethAnalyzer(BaseAnalyzer):
                      f"N Months:  {n}\n"
 
         return result_str
-    
-
-
-if __name__ == '__main__':
-
-    analyzer = EqualWeightedFactorModelAnalyzer()
-    ff3, ff5, q, long_short = analyzer.analyze()
-
-    # WRITE IN FILES TO GET COMPLETE OUTPUT!
-    with open("ff3_output.txt", "w") as f:
-        f.write(ff3)
-
-    with open("ff5_output.txt", "w") as f:
-        f.write(ff5)
-
-    with open("q_output.txt", "w") as f:
-        f.write(q)
-
-    with open("long_short_output.txt", "w") as f:
-        f.write(long_short)
-
-    #analyzer = FamaMacBethAnalyzer()
-    #result = analyzer.analyze()
-    #print(result)
