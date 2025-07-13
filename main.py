@@ -52,15 +52,31 @@ def upload_excel() -> str:
             elif filename.endswith('.csv'):
                 df = pd.read_csv(uploaded_file)
             else:
-                return render_template('upload.html', result="Fehler: Nur CSV- oder Excel-Dateien sind erlaubt.")
+                return render_template('upload.html', result="Error: Only CSV- or Excel-files are allowed.")
 
             equal_factor_model_analyzer = EqualWeightedFactorModelAnalyzer(df)
             value_factor_model_analyzer = ValueWeightedFactorModelAnalyzer(df)
             fama_macbeth_analyzer = FamaMacBethAnalyzer(df)
 
-            ff3_equal, ff5_equal, q_equal, long_short_equal = equal_factor_model_analyzer.analyze()
-            ff3_value, ff5_value, q_value, long_short_value = value_factor_model_analyzer.analyze()
-            fama_macbeth_res = fama_macbeth_analyzer.analyze()
+            results_equal, long_short_results_equal = equal_factor_model_analyzer.analyze()
+            ff3_equal, ff5_equal, q_equal = equal_factor_model_analyzer.results_to_strings(results_equal)
+            long_short_equal = equal_factor_model_analyzer.long_short_res_to_string(long_short_results_equal)
+            latex_ff3_equal = equal_factor_model_analyzer.generate_latex_table(results_equal, "FF3")
+            latex_ff5_equal = equal_factor_model_analyzer.generate_latex_table(results_equal, "FF5")
+            latex_q_equal = equal_factor_model_analyzer.generate_latex_table(results_equal, "Q")
+            latex_long_short_equal = equal_factor_model_analyzer.generate_long_short_latex_table(long_short_results_equal)
+
+            results_value, long_short_results_value = value_factor_model_analyzer.analyze()
+            ff3_value, ff5_value, q_value = value_factor_model_analyzer.results_to_strings(results_value)
+            long_short_value = value_factor_model_analyzer.long_short_res_to_string(long_short_results_value)
+            latex_ff3_value = value_factor_model_analyzer.generate_latex_table(results_value, "FF3")
+            latex_ff5_value = value_factor_model_analyzer.generate_latex_table(results_value, "FF5")
+            latex_q_value = value_factor_model_analyzer.generate_latex_table(results_value, "Q")
+            latex_long_short_value = value_factor_model_analyzer.generate_long_short_latex_table(long_short_results_value)
+
+            beta_mean, beta_std, t_stat, n = fama_macbeth_analyzer.analyze()
+            fama_macbeth_res = fama_macbeth_analyzer.fama_macbeth_res_to_string(beta_mean, beta_std, t_stat, n)
+            latex_fama_macbeth = fama_macbeth_analyzer.generate_fama_macbeth_latex_table(beta_mean, beta_std, t_stat, n)
 
             basedir = os.path.abspath(os.path.dirname(__file__))
             result_dir = os.path.join(basedir, "static", "downloads")
@@ -79,7 +95,18 @@ def upload_excel() -> str:
                 "ff5_value.txt": ff5_value,
                 "q_value.txt": q_value,
                 "long_short_value.txt": long_short_value,
-                "fama_macbeth.txt": fama_macbeth_res
+                "fama_macbeth.txt": fama_macbeth_res,
+                "latex_output.tex": create_complete_latex_document(
+                    latex_ff3_equal, 
+                    latex_ff5_equal, 
+                    latex_q_equal, 
+                    latex_long_short_equal,
+                    latex_ff3_value,
+                    latex_ff5_value,
+                    latex_q_value,
+                    latex_long_short_value,
+                    latex_fama_macbeth
+                )
             }
 
             with zipfile.ZipFile(zip_path, 'w') as zipf:
@@ -99,6 +126,80 @@ def upload_excel() -> str:
 
     return render_template('upload.html', result="No file uploaded.")
 
+
+def create_complete_latex_document(
+        ff3_equal_tex: str, 
+        ff5_equal_tex: str, 
+        q_equal_tex: str, 
+        long_short_equal_tex: str, 
+        ff3_value_tex: str, 
+        ff5_value_tex: str, 
+        q_value_tex: str, 
+        long_short_value_tex: str,
+        fama_macbeth_tex: str,
+        title: str = "Factor Model Regression Results"
+    ) -> str:
+    """
+    Wraps given LaTeX tables into a complete .tex document.
+
+    Args:
+        ff3_tex (str): LaTeX table for FF3 model.
+        ff5_tex (str): LaTeX table for FF5 model.
+        q_tex (str): LaTeX table for Q-Factor model.
+        title (str): Title of the LaTeX document.
+
+    Returns:
+        str: Full LaTeX document as a string.
+    """
+    document = r"""
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[a4paper, margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{caption}
+\usepackage{amsmath}
+
+\title{""" + title + r"""}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+""" + r"""
+\section{Fama-French Analysis with Equal Weighting}
+\subsection{Fama-French 3-Factor Model}
+""" + "\n" + ff3_equal_tex + "\n\n" + r"""
+\pagebreak
+\subsection{Fama-French 5-Factor Model}
+""" + "\n" + ff5_equal_tex + "\n\n" + r"""
+\pagebreak
+\subsection{Q-Factor Model}
+""" + "\n" + q_equal_tex + "\n" + r"""
+
+\subsection{Long-Short Analysis}
+""" + "\n" + long_short_equal_tex + "\n" + r"""
+\pagebreak
+\section{Fama-French Analysis with Value Weighting}
+\subsection{Fama-French 3-Factor Model}
+""" + "\n" + ff3_value_tex + "\n\n" + r"""
+\pagebreak
+\subsection{Fama-French 5-Factor Model}
+""" + "\n" + ff5_value_tex + "\n\n" + r"""
+\pagebreak
+\subsection{Q-Factor Model}
+""" + "\n" + q_value_tex + "\n" + r"""
+\pagebreak
+\subsection{Long-Short Analysis}
+""" + "\n" + long_short_value_tex + "\n" + r"""
+
+\section{Fama-MacBeth Regression Result}
+""" + "\n" + fama_macbeth_tex + "\n" + r"""
+\end{document}
+"""
+
+    return document
 
 if __name__ == "__main__": 
     app.run(debug=True)

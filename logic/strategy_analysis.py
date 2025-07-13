@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import statsmodels.api as sm
 from abc import ABC, abstractmethod
+from collections import defaultdict
 from typing import Tuple, Any
 
 
@@ -27,14 +28,26 @@ class BaseAnalyzer(ABC):
         self.crsp = pd.read_csv("./data/dsws_crsp.csv")
         self.factors = pd.read_csv("./data/Factors.csv")
 
-    def compute_long_short_regression(self, port_returns: pd.DataFrame, df_factors: pd.DataFrame) -> str:
+    def prepare_signal_df(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Standardize a 3-column input DataFrame to columns: permno, date, signal.
+        """
+        if df.shape[1] != 3:
+            raise ValueError("Input data must have exactly 3 columns: DSCD, DATE, SIGNAL.")
+        df_signal = df.copy()
+        df_signal.columns = ['permno', 'date', 'signal']
+        df_signal['date'] = pd.to_datetime(df_signal['date'])
+        df_signal['year_month'] = df_signal['date'].dt.to_period('M')
+        return df_signal
+
+    def compute_long_short_regression(self, port_returns: pd.DataFrame, df_factors: pd.DataFrame) -> dict:
         """
         Computes long-short portfolio (Slice 10 - Slice 1) returns and regresses on FF3, FF5, Q models.
         """
         pivot = port_returns.pivot(index='year_month', columns='slice', values='port_ret')
 
         if 1 not in pivot.columns or 10 not in pivot.columns:
-            return "Long-Short regression skipped: Slice 1 or 10 not found."
+            raise ValueError("Long-Short regression skipped: Slice 1 or 10 not found.")
 
         # Caluclate Long-short: High - Low
         pivot['long_short'] = pivot[10] - pivot[1]
@@ -52,24 +65,201 @@ class BaseAnalyzer(ABC):
         res_ff5 = sm.OLS(y, x_ff5).fit()
         res_q   = sm.OLS(y, x_q).fit()
 
-        result = "\n======= Long-Short Portfolio (Slice 10 - Slice 1) =======\n"
-        result += "\n--- FF3 Regression ---\n" + res_ff3.summary().as_text()
-        result += "\n\n--- FF5 Regression ---\n" + res_ff5.summary().as_text()
-        result += "\n\n--- Q-Factor Regression ---\n" + res_q.summary().as_text()
+        result = {
+            "FF3": res_ff3,
+            "FF5": res_ff5,
+            "Q": res_q
+        }
 
         return result
+
+
+    # Methods for formatting results
+    #-------------------------------------
+    def results_to_strings(self, results: dict) -> Tuple[str, str, str]:
+        ff3_str, ff5_str, q_str = "", "", ""
+        for q, res in results.items():
+            ff3_str += f"\n--- Slice {q} ---\n{res['FF3'].summary().as_text()}\n"
+            ff5_str += f"\n--- Slice {q} ---\n{res['FF5'].summary().as_text()}\n"
+            q_str += f"\n--- Slice {q} ---\n{res['Q'].summary().as_text()}\n"
+
+        return ff3_str, ff5_str, q_str
+
+    def long_short_res_to_string(self, result: dict) -> str:
+        output = ""
+        output = "\n======= Long-Short Portfolio (Slice 10 - Slice 1) =======\n"
+        output += "\n--- FF3 Regression ---\n" + result["FF3"].summary().as_text()
+        output += "\n\n--- FF5 Regression ---\n" + result["FF5"].summary().as_text()
+        output += "\n\n--- Q-Factor Regression ---\n" + result["Q"].summary().as_text()
+
+        return output
     
-    def prepare_signal_df(self, df: pd.DataFrame) -> pd.DataFrame:
+    def fama_macbeth_res_to_string(self, beta_mean, beta_std, t_stat, n) -> str:
+        result_str = "Fama-MacBeth Regression Result\n" \
+                     "------------------------------\n" \
+                     f"Mean Beta: {beta_mean:.4f}\n" \
+                     f"Std Dev:   {beta_std:.4f}\n" \
+                     f"T-Stat:    {t_stat:.4f}\n" \
+                     f"N Months:  {n}\n"
+        
+        return result_str
+                
+
+    def generate_latex_table(self, results_dict: dict, model_name: str) -> str:
         """
-        Standardize a 3-column input DataFrame to columns: permno, date, signal.
+        Generates a LaTeX table from regression results.
+
+        Args:
+            results_dict (dict): Dictionary mapping slice to statsmodels regression results.
+            model_name (str): One of 'FF3', 'FF5', or 'Q'.
+
+        Returns:
+            str: LaTeX code for the table.
         """
-        if df.shape[1] != 3:
-            raise ValueError("Input data must have exactly 3 columns: DSCD, DATE, SIGNAL.")
-        df_signal = df.copy()
-        df_signal.columns = ['permno', 'date', 'signal']
-        df_signal['date'] = pd.to_datetime(df_signal['date'])
-        df_signal['year_month'] = df_signal['date'].dt.to_period('M')
-        return df_signal
+
+        factor_order = {
+            'FF3': ['const', 'MKT', 'SMB', 'HML'],
+            'FF5': ['const', 'MKT', 'SMB', 'HML', 'RMW', 'CMA'],
+            'Q':   ['const', 'MKT', 'IA', 'ROE', 'SIZE']
+        }
+
+        factor_labels = {
+            'const': r'$\alpha$',
+            'MKT': r'$\beta_{MKT}$',
+            'SMB': r'$\beta_{SMB}$',
+            'HML': r'$\beta_{HML}$',
+            'RMW': r'$\beta_{RMW}$',
+            'CMA': r'$\beta_{CMA}$',
+            'SIZE': r'$\beta_{SIZE}$',
+            'IA': r'$\beta_{IA}$',
+            'ROE': r'$\beta_{ROE}$'
+        }
+
+        # Table header
+        headers = [factor_labels[p] for p in factor_order[model_name]]
+        table_header = " & " + " & ".join(headers) + r" \\ \toprule" + "\n"
+
+        # Table body
+        body = ""
+        for slice_id in sorted(results_dict.keys()):
+            model = results_dict[slice_id][model_name]
+            coef = model.params
+            tvals = model.tvalues
+
+            row = [str(slice_id)]
+            for factor in factor_order[model_name]:
+                if factor in coef:
+                    val = f"{coef[factor]:.4f}"
+                    tstat = f"{tvals[factor]:.2f}"
+                    cell = r"\begin{tabular}{@{}c@{}}" + val +  r"\\\relax [" +  tstat + r"]\end{tabular}"
+                else:
+                    cell = ""
+                row.append(cell)
+
+            body += " & ".join(row) + r" \\[12pt]" + "\n"
+
+        # Final LaTeX table
+        table = (
+            r"\begin{table}[htbp]" + "\n"
+            r"\centering" + "\n"
+            r"\begin{tabular}{l" + "c" * len(factor_order[model_name]) + "}" + "\n"
+            r"\toprule" + "\n"
+            "Slice" + table_header + body + r"\bottomrule" + "\n"
+            r"\end{tabular}" + "\n"
+            rf"\caption{{Regression Results: {model_name}. T-statistics are in brackets.}}" + "\n"
+            r"\end{table}"
+        )
+
+        return table
+    
+    def generate_long_short_latex_table(self, results_dict: dict) -> str:
+        """
+        Generates a LaTeX table for the long-short regression results across FF3, FF5, and Q models.
+
+        Args:
+            res_ff3, res_ff5, res_q (RegressionResultsWrapper): Regression results for each model.
+
+        Returns:
+            str: LaTeX code for the table.
+        """
+        models = {
+            'FF3': results_dict["FF3"],
+            'FF5': results_dict["FF5"],
+            'Q': results_dict["Q"]
+        }
+
+        # Desired fixed order of all potential factors
+        all_factors = ['const', 'MKT', 'SMB', 'HML', 'RMW', 'CMA', 'IA', 'ROE', 'SIZE']
+
+        # LaTeX-friendly labels
+        factor_labels = {
+            'const': r'$\alpha$',
+            'MKT': r'$\beta_{MKT}$',
+            'SMB': r'$\beta_{SMB}$',
+            'HML': r'$\beta_{HML}$',
+            'RMW': r'$\beta_{RMW}$',
+            'CMA': r'$\beta_{CMA}$',
+            'SIZE': r'$\beta_{SIZE}$',
+            'IA': r'$\beta_{IA}$',
+            'ROE': r'$\beta_{ROE}$'
+        }
+
+        # Table header
+        headers = ["Model"] + [factor_labels.get(f, f) for f in all_factors]
+        table_header = " & ".join(headers) + r" \\ \toprule" + "\n"
+
+        # Table body with t-stats
+        body = ""
+        for model_name, res in models.items():
+            row = [model_name]
+            coef = res.params
+            tvals = res.tvalues
+
+            for factor in all_factors:
+                if factor in coef:
+                    val = f"{coef[factor]:.4f}"
+                    tstat = f"{tvals[factor]:.2f}"
+                    cell = r"\begin{tabular}{@{}c@{}}" + val +  r"\\\relax[" +  tstat + r"]\end{tabular}"
+                else:
+                    cell = ""
+                row.append(cell)
+            body += " & ".join(row) + r" \\[12pt]" + "\n"
+
+        # Full table
+        table = (
+            r"\begin{table}[htbp]" + "\n"
+            r"\centering" + "\n"
+            r"\begin{tabular}{l" + "c" * len(all_factors) + "}" + "\n"
+            r"\toprule" + "\n"
+            + table_header + body +
+            r"\bottomrule" + "\n"
+            r"\end{tabular}" + "\n"
+            r"\caption{Long-Short Regression Results (Slice 10 - Slice 1). T-statistics are in brackets.}" + "\n"
+            r"\end{table}"
+        )
+
+        return table
+    
+    def generate_fama_macbeth_latex_table(self, beta_mean, beta_std, t_stat, n) -> str:
+        table = (
+            r"\begin{table}[htbp]" + "\n"
+            r"\centering" + "\n"
+            r"\begin{tabular}{lr}" + "\n"
+            r"\toprule" + "\n"
+            r"Ratio & Value \\" + "\n"
+            r"\midrule" + "\n"
+            rf"Mean Beta & {beta_mean:.4f} \\" + "\n"
+            rf"Standard Deviation & {beta_std:.4f} \\" + "\n"
+            rf"T-Statistic & {t_stat:.4f} \\" + "\n"
+            rf"N (Months) & {n} \\" + "\n"
+            r"\bottomrule" + "\n"
+            r"\end{tabular}" + "\n"
+            r"\caption{Fama-MacBeth Regression Result}" + "\n"
+            r"\end{table}"
+        )
+
+        return table
+
 
     @abstractmethod
     def analyze(self) -> Any:
@@ -160,7 +350,7 @@ class EqualWeightedFactorModelAnalyzer(BaseAnalyzer):
     Analyzer that performs Fama-French (3, 5, Q-Factor) regressions on signal-based portfolios.
     """
 
-    def analyze(self) -> Tuple[str, str, str, str]:
+    def analyze(self) -> Tuple[dict, dict]:
         """
         Performs:
         1. Merge signals with CRSP data.
@@ -180,6 +370,9 @@ class EqualWeightedFactorModelAnalyzer(BaseAnalyzer):
         df_crsp = self.crsp.rename(columns={'DSCD': 'permno', 'DATE': 'date'})
         df_crsp['date'] = pd.to_datetime(df_crsp['date'])
         df_crsp['year_month'] = df_crsp['date'].dt.to_period('M')
+
+        # Convert percentage in decimal
+        df_crsp['RET_USD'] = df_crsp['RET_USD'] / 100
 
         # Merge signals with CRSP
         merged = pd.merge(df_signal, df_crsp, on=['permno', 'year_month'], how='inner')
@@ -226,21 +419,15 @@ class EqualWeightedFactorModelAnalyzer(BaseAnalyzer):
             res_q = sm.OLS(y, x_q).fit()
 
             results[q] = {
-                'FF3': res_ff3.summary().as_text(),
-                'FF5': res_ff5.summary().as_text(),
-                'Q': res_q.summary().as_text()
+                'FF3': res_ff3,
+                'FF5': res_ff5,
+                'Q': res_q
             }
+        
+        long_short_res = self.compute_long_short_regression(port_returns, df_factors)
 
-        # Format return strings
-        ff3_str, ff5_str, q_str, long_short_str = "", "", "", ""
-        for q, res in results.items():
-            ff3_str += f"\n--- Slice {q} ---\n{res['FF3']}\n"
-            ff5_str += f"\n--- Slice {q} ---\n{res['FF5']}\n"
-            q_str += f"\n--- Slice {q} ---\n{res['Q']}\n"
-
-        long_short_str = self.compute_long_short_regression(port_returns, df_factors)
-
-        return ff3_str, ff5_str, q_str, long_short_str
+        return results, long_short_res
+        
 
 
 class ValueWeightedFactorModelAnalyzer(BaseAnalyzer):
@@ -258,6 +445,9 @@ class ValueWeightedFactorModelAnalyzer(BaseAnalyzer):
         df_crsp = self.crsp.rename(columns={'DSCD': 'permno', 'DATE': 'date'})
         df_crsp['date'] = pd.to_datetime(df_crsp['date'])
         df_crsp['year_month'] = df_crsp['date'].dt.to_period('M')
+
+        # Convert percentage in decimal
+        df_crsp['RET_USD'] = df_crsp['RET_USD'] / 100
 
         # Merge signals with CRSP
         merged = pd.merge(df_signal, df_crsp, on=['permno', 'year_month'], how='inner')
@@ -316,21 +506,14 @@ class ValueWeightedFactorModelAnalyzer(BaseAnalyzer):
             res_q = sm.OLS(y, x_q).fit()
 
             results[q] = {
-                'FF3': res_ff3.summary().as_text(),
-                'FF5': res_ff5.summary().as_text(),
-                'Q': res_q.summary().as_text()
+                'FF3': res_ff3,
+                'FF5': res_ff5,
+                'Q': res_q
             }
 
-        # Format results into strings
-        ff3_str, ff5_str, q_str, long_short_str = "", "", "", ""
-        for q, res in results.items():
-            ff3_str += f"\n--- Slice {q} ---\n{res['FF3']}\n"
-            ff5_str += f"\n--- Slice {q} ---\n{res['FF5']}\n"
-            q_str += f"\n--- Slice {q} ---\n{res['Q']}\n"
+        long_short_res = self.compute_long_short_regression(port_returns, df_factors)
 
-        long_short_str = self.compute_long_short_regression(port_returns, df_factors)
-
-        return ff3_str, ff5_str, q_str, long_short_str
+        return results, long_short_res
 
 
 class FamaMacBethAnalyzer(BaseAnalyzer):
@@ -338,7 +521,7 @@ class FamaMacBethAnalyzer(BaseAnalyzer):
     Performs Fama-MacBeth regression of returns on signals.
     """
 
-    def analyze(self) -> str:
+    def analyze(self) -> tuple:
         # Merge signal and CRSP data
         df_signal = self.prepare_signal_df(self.data)
         df_crsp = self.crsp.rename(columns={'DSCD': 'permno', 'DATE': 'date'})
@@ -348,6 +531,9 @@ class FamaMacBethAnalyzer(BaseAnalyzer):
 
         df_signal['year_month'] = df_signal['date'].dt.to_period('M')
         df_crsp['year_month'] = df_crsp['date'].dt.to_period('M')
+
+        # Convert percentage in decimal
+        df_crsp['RET_USD'] = df_crsp['RET_USD'] / 100
 
         merged = pd.merge(df_signal, df_crsp, on=['permno', 'year_month'], how='inner')
 
@@ -374,11 +560,4 @@ class FamaMacBethAnalyzer(BaseAnalyzer):
         n = len(betas_series)
         t_stat = beta_mean / (beta_std / np.sqrt(n))
 
-        result_str = "Fama-MacBeth Regression Result\n" \
-                     "------------------------------\n" \
-                     f"Mean Beta: {beta_mean:.4f}\n" \
-                     f"Std Dev:   {beta_std:.4f}\n" \
-                     f"T-Stat:    {t_stat:.4f}\n" \
-                     f"N Months:  {n}\n"
-
-        return result_str
+        return beta_mean, beta_std, t_stat, n
