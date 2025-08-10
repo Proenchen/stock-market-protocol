@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 import statsmodels.api as sm
 from abc import ABC, abstractmethod
-from collections import defaultdict
 from typing import Tuple, Any
 
 
@@ -33,7 +32,7 @@ class BaseAnalyzer(ABC):
         Standardize a 3-column input DataFrame to columns: permno, date, signal.
         """
         if df.shape[1] != 3:
-            raise ValueError("Input data must have exactly 3 columns: DSCD, DATE, SIGNAL.")
+            raise ValueError("Input data must have exactly 3 columns.")
         df_signal = df.copy()
         df_signal.columns = ['permno', 'date', 'signal']
         df_signal['date'] = pd.to_datetime(df_signal['date'])
