@@ -60,17 +60,42 @@
             evaluating the anomaly and emails the user both LaTeX files and a PDF version of the report.
         </p>
 
-        <form action="/upload_excel" method="POST" enctype="multipart/form-data">
+        <form action="/upload_excel" method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
             <div class="row mb-3">
+                <div class="col-md-6 mb-3">
+                    <label for="user-email" class="form-label">
+                        Email address <span class="text-danger">*</span>
+                    </label>
+                    <input type="email" class="textbox" id="user-email" name="user-email"
+                        placeholder="you@example.com" required>
+                    <div class="invalid-feedback">Please enter a valid email address.</div>
+                </div>
+
+                <!-- Identifier field -->
+                <div class="col-md-6 mb-3">
+                    <label for="user-identifier" class="form-label">
+                        Identifier <span class="text-danger">*</span>
+                    </label>
+                    <input type="text" class="textbox" id="user-identifier" name="user-identifier"
+                        placeholder="e.g., strategy_01" required>
+                    <div class="invalid-feedback">Please provide an identifier.</div>
+                </div>
+
+                <!-- File upload -->
                 <div class="col-12">
                     <div id="drop-zone">
                         <p id="drop-text">Drag & Drop your Excel file here or click to upload</p>
-                        <p id="file-caption" style="font-size: 0.8rem; color: gray; margin-top: 7px;">Accepted file
-                            formats are: .xls, .xlsx, .xlsm, .csv</p>
+                        <p id="file-caption" style="font-size: 0.8rem; color: gray; margin-top: 7px;">
+                            Accepted file formats are: .xls, .xlsx, .xlsm, .csv
+                        </p>
                         <input class="d-none" type="file" id="excel-file" name="excel-file"
                             accept=".xlsx,.xls,.xlsm,.csv" required>
+                        <div class="invalid-feedback" id="file-invalid-feedback" style="display:none;">
+                            Please upload a file.
+                        </div>
                     </div>
                 </div>
+
                 <div class="col-12 mt-2 text-end">
                     <button type="submit" class="btn btn-primary">Analyze file</button>
                 </div>
