@@ -13,7 +13,7 @@ task_queue = Queue()
 
 def worker():
     while True:
-        file_bytes, filename = task_queue.get()
+        file_bytes, filename, email, dataset_identifier = task_queue.get()
         try:
             file_obj = io.BytesIO(file_bytes)
 
@@ -26,16 +26,16 @@ def worker():
 
             zip_path = run_analysis(df)
             Mail.send_email_with_attachment(
-                to_email="julianshen2002@yahoo.de",
-                subject="Global Stock Market Protocol Analysis - Results",
+                to_email=email,
+                subject=f"Global Stock Market Protocol Analysis RESULTS - {dataset_identifier}",
                 body="Attached are the results of your analysis.",
                 attachment_path=zip_path
             )
 
         except Exception as e:
             Mail.send_email_with_attachment(
-                to_email="julianshen2002@yahoo.de",
-                subject="Global Stock Market Protocol Analysis - Error",
+                to_email=email,
+                subject=f"Global Stock Market Protocol Analysis ERROR - {dataset_identifier}",
                 body=f"An error occurred during processing:\n\n{str(e)}"
             )
 
@@ -81,13 +81,15 @@ def navbar() -> str:
 @app.route('/upload_excel', methods=['POST'])
 def upload_excel() -> str:
     uploaded_file = request.files.get("excel-file")
+    email = request.form.get("user-email")
+    dataset_identifier = request.form.get("dataset-identifier")
 
     if uploaded_file:
         file_bytes = uploaded_file.read()
         filename = uploaded_file.filename.lower()
 
         # Add task to queue (processed sequentially by worker)
-        task_queue.put((file_bytes, filename))
+        task_queue.put((file_bytes, filename, email, dataset_identifier))
 
         return render_template('success.html')
 

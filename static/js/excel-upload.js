@@ -46,7 +46,7 @@ if (form) {
         let fileSelected = fileInput.files && fileInput.files.length > 0;
 
         const emailInput = document.getElementById("user-email");
-        const identifierInput = document.getElementById("user-identifier");
+        const identifierInput = document.getElementById("dataset-identifier");
 
         if (emailInput.checkValidity()) {
             emailInput.classList.add("is-valid");
