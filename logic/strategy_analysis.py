@@ -380,11 +380,11 @@ class FamaMacBethAnalyzer(BaseAnalyzer):
 
 
 def run_analysis(df: pd.DataFrame):
-
+    print(0)
     equal_factor_model_analyzer = EqualWeightedFactorModelAnalyzer(df)
     value_factor_model_analyzer = ValueWeightedFactorModelAnalyzer(df)
     fama_macbeth_analyzer = FamaMacBethAnalyzer(df)
-
+    print(1)
     results_equal, long_short_results_equal = equal_factor_model_analyzer.analyze()
     ff3_equal, ff5_equal, q_equal = Formatter.results_to_strings(results_equal)
     long_short_equal = Formatter.long_short_res_to_string(long_short_results_equal)
@@ -392,7 +392,7 @@ def run_analysis(df: pd.DataFrame):
     latex_ff5_equal = Formatter.generate_latex_table(results_equal, "FF5")
     latex_q_equal = Formatter.generate_latex_table(results_equal, "Q")
     latex_long_short_equal = Formatter.generate_long_short_latex_table(long_short_results_equal)
-
+    print(2)
     results_value, long_short_results_value = value_factor_model_analyzer.analyze()
     ff3_value, ff5_value, q_value = Formatter.results_to_strings(results_value)
     long_short_value = Formatter.long_short_res_to_string(long_short_results_value)
@@ -400,15 +400,16 @@ def run_analysis(df: pd.DataFrame):
     latex_ff5_value = Formatter.generate_latex_table(results_value, "FF5")
     latex_q_value = Formatter.generate_latex_table(results_value, "Q")
     latex_long_short_value = Formatter.generate_long_short_latex_table(long_short_results_value)
-
+    print(3)
     beta_mean, beta_std, t_stat, n = fama_macbeth_analyzer.analyze()
     fama_macbeth_res = Formatter.fama_macbeth_res_to_string(beta_mean, beta_std, t_stat, n)
     latex_fama_macbeth = Formatter.generate_fama_macbeth_latex_table(beta_mean, beta_std, t_stat, n)
-
+    print(4)
     basedir = os.path.abspath(os.path.dirname(__file__))
-    result_dir = os.path.join(basedir, "static", "downloads")
+    static_dir = os.path.join(os.path.dirname(basedir), "static")
+    result_dir = os.path.join(static_dir, "downloads")
     os.makedirs(result_dir, exist_ok=True)
-
+    print(5)
     session_id = str(uuid.uuid4())
     zip_filename = f"{session_id}_results.zip"
     zip_path = os.path.join(result_dir, zip_filename)
@@ -444,7 +445,7 @@ def run_analysis(df: pd.DataFrame):
             with open(temp_file, 'w', encoding='utf-8') as f:
                 f.write(str(content))
             zipf.write(temp_file, arcname=filename)
-
+            print(6)
             if filename == "output.tex":
                 pdf_temp_path = os.path.join(result_dir, f"{session_id}_output.pdf")
                 Formatter.tex_file_to_pdf(temp_file, pdf_temp_path)
@@ -452,5 +453,5 @@ def run_analysis(df: pd.DataFrame):
                 os.remove(pdf_temp_path)
 
             os.remove(temp_file)
-
+    print(7)
     return zip_path
