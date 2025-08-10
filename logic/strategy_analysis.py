@@ -1,9 +1,12 @@
+import os
 import numpy as np
 import pandas as pd
+import uuid
+import zipfile
 import statsmodels.api as sm
 from abc import ABC, abstractmethod
 from typing import Tuple, Any
-
+from logic.formatter import Formatter
 
 # Constants
 #------------------
@@ -72,192 +75,6 @@ class BaseAnalyzer(ABC):
 
         return result
 
-
-    # Methods for formatting results
-    #-------------------------------------
-    def results_to_strings(self, results: dict) -> Tuple[str, str, str]:
-        ff3_str, ff5_str, q_str = "", "", ""
-        for q, res in results.items():
-            ff3_str += f"\n--- Slice {q} ---\n{res['FF3'].summary().as_text()}\n"
-            ff5_str += f"\n--- Slice {q} ---\n{res['FF5'].summary().as_text()}\n"
-            q_str += f"\n--- Slice {q} ---\n{res['Q'].summary().as_text()}\n"
-
-        return ff3_str, ff5_str, q_str
-
-    def long_short_res_to_string(self, result: dict) -> str:
-        output = ""
-        output = "\n======= Long-Short Portfolio (Slice 10 - Slice 1) =======\n"
-        output += "\n--- FF3 Regression ---\n" + result["FF3"].summary().as_text()
-        output += "\n\n--- FF5 Regression ---\n" + result["FF5"].summary().as_text()
-        output += "\n\n--- Q-Factor Regression ---\n" + result["Q"].summary().as_text()
-
-        return output
-    
-    def fama_macbeth_res_to_string(self, beta_mean, beta_std, t_stat, n) -> str:
-        result_str = "Fama-MacBeth Regression Result\n" \
-                     "------------------------------\n" \
-                     f"Mean Beta: {beta_mean:.4f}\n" \
-                     f"Std Dev:   {beta_std:.4f}\n" \
-                     f"T-Stat:    {t_stat:.4f}\n" \
-                     f"N Months:  {n}\n"
-        
-        return result_str
-                
-
-    def generate_latex_table(self, results_dict: dict, model_name: str) -> str:
-        """
-        Generates a LaTeX table from regression results.
-
-        Args:
-            results_dict (dict): Dictionary mapping slice to statsmodels regression results.
-            model_name (str): One of 'FF3', 'FF5', or 'Q'.
-
-        Returns:
-            str: LaTeX code for the table.
-        """
-
-        factor_order = {
-            'FF3': ['const', 'MKT', 'SMB', 'HML'],
-            'FF5': ['const', 'MKT', 'SMB', 'HML', 'RMW', 'CMA'],
-            'Q':   ['const', 'MKT', 'IA', 'ROE', 'SIZE']
-        }
-
-        factor_labels = {
-            'const': r'$\alpha$',
-            'MKT': r'$\beta_{MKT}$',
-            'SMB': r'$\beta_{SMB}$',
-            'HML': r'$\beta_{HML}$',
-            'RMW': r'$\beta_{RMW}$',
-            'CMA': r'$\beta_{CMA}$',
-            'SIZE': r'$\beta_{SIZE}$',
-            'IA': r'$\beta_{IA}$',
-            'ROE': r'$\beta_{ROE}$'
-        }
-
-        # Table header
-        headers = [factor_labels[p] for p in factor_order[model_name]]
-        table_header = " & " + " & ".join(headers) + r" \\ \toprule" + "\n"
-
-        # Table body
-        body = ""
-        for slice_id in sorted(results_dict.keys()):
-            model = results_dict[slice_id][model_name]
-            coef = model.params
-            tvals = model.tvalues
-
-            row = [str(slice_id)]
-            for factor in factor_order[model_name]:
-                if factor in coef:
-                    val = f"{coef[factor]:.4f}"
-                    tstat = f"{tvals[factor]:.2f}"
-                    cell = r"\begin{tabular}{@{}c@{}}" + val +  r"\\\relax [" +  tstat + r"]\end{tabular}"
-                else:
-                    cell = ""
-                row.append(cell)
-
-            body += " & ".join(row) + r" \\[12pt]" + "\n"
-
-        # Final LaTeX table
-        table = (
-            r"\begin{table}[htbp]" + "\n"
-            r"\centering" + "\n"
-            r"\begin{tabular}{l" + "c" * len(factor_order[model_name]) + "}" + "\n"
-            r"\toprule" + "\n"
-            "Slice" + table_header + body + r"\bottomrule" + "\n"
-            r"\end{tabular}" + "\n"
-            rf"\caption{{Regression Results: {model_name}. T-statistics are in brackets.}}" + "\n"
-            r"\end{table}"
-        )
-
-        return table
-    
-    def generate_long_short_latex_table(self, results_dict: dict) -> str:
-        """
-        Generates a LaTeX table for the long-short regression results across FF3, FF5, and Q models.
-
-        Args:
-            res_ff3, res_ff5, res_q (RegressionResultsWrapper): Regression results for each model.
-
-        Returns:
-            str: LaTeX code for the table.
-        """
-        models = {
-            'FF3': results_dict["FF3"],
-            'FF5': results_dict["FF5"],
-            'Q': results_dict["Q"]
-        }
-
-        # Desired fixed order of all potential factors
-        all_factors = ['const', 'MKT', 'SMB', 'HML', 'RMW', 'CMA', 'IA', 'ROE', 'SIZE']
-
-        # LaTeX-friendly labels
-        factor_labels = {
-            'const': r'$\alpha$',
-            'MKT': r'$\beta_{MKT}$',
-            'SMB': r'$\beta_{SMB}$',
-            'HML': r'$\beta_{HML}$',
-            'RMW': r'$\beta_{RMW}$',
-            'CMA': r'$\beta_{CMA}$',
-            'SIZE': r'$\beta_{SIZE}$',
-            'IA': r'$\beta_{IA}$',
-            'ROE': r'$\beta_{ROE}$'
-        }
-
-        # Table header
-        headers = ["Model"] + [factor_labels.get(f, f) for f in all_factors]
-        table_header = " & ".join(headers) + r" \\ \toprule" + "\n"
-
-        # Table body with t-stats
-        body = ""
-        for model_name, res in models.items():
-            row = [model_name]
-            coef = res.params
-            tvals = res.tvalues
-
-            for factor in all_factors:
-                if factor in coef:
-                    val = f"{coef[factor]:.4f}"
-                    tstat = f"{tvals[factor]:.2f}"
-                    cell = r"\begin{tabular}{@{}c@{}}" + val +  r"\\\relax[" +  tstat + r"]\end{tabular}"
-                else:
-                    cell = ""
-                row.append(cell)
-            body += " & ".join(row) + r" \\[12pt]" + "\n"
-
-        # Full table
-        table = (
-            r"\begin{table}[htbp]" + "\n"
-            r"\centering" + "\n"
-            r"\begin{tabular}{l" + "c" * len(all_factors) + "}" + "\n"
-            r"\toprule" + "\n"
-            + table_header + body +
-            r"\bottomrule" + "\n"
-            r"\end{tabular}" + "\n"
-            r"\caption{Long-Short Regression Results (Slice 10 - Slice 1). T-statistics are in brackets.}" + "\n"
-            r"\end{table}"
-        )
-
-        return table
-    
-    def generate_fama_macbeth_latex_table(self, beta_mean, beta_std, t_stat, n) -> str:
-        table = (
-            r"\begin{table}[htbp]" + "\n"
-            r"\centering" + "\n"
-            r"\begin{tabular}{lr}" + "\n"
-            r"\toprule" + "\n"
-            r"Ratio & Value \\" + "\n"
-            r"\midrule" + "\n"
-            rf"Mean Beta & {beta_mean:.4f} \\" + "\n"
-            rf"Standard Deviation & {beta_std:.4f} \\" + "\n"
-            rf"T-Statistic & {t_stat:.4f} \\" + "\n"
-            rf"N (Months) & {n} \\" + "\n"
-            r"\bottomrule" + "\n"
-            r"\end{tabular}" + "\n"
-            r"\caption{Fama-MacBeth Regression Result}" + "\n"
-            r"\end{table}"
-        )
-
-        return table
 
 
     @abstractmethod
@@ -560,3 +377,80 @@ class FamaMacBethAnalyzer(BaseAnalyzer):
         t_stat = beta_mean / (beta_std / np.sqrt(n))
 
         return beta_mean, beta_std, t_stat, n
+
+
+def run_analysis(df: pd.DataFrame):
+
+    equal_factor_model_analyzer = EqualWeightedFactorModelAnalyzer(df)
+    value_factor_model_analyzer = ValueWeightedFactorModelAnalyzer(df)
+    fama_macbeth_analyzer = FamaMacBethAnalyzer(df)
+
+    results_equal, long_short_results_equal = equal_factor_model_analyzer.analyze()
+    ff3_equal, ff5_equal, q_equal = Formatter.results_to_strings(results_equal)
+    long_short_equal = Formatter.long_short_res_to_string(long_short_results_equal)
+    latex_ff3_equal = Formatter.generate_latex_table(results_equal, "FF3")
+    latex_ff5_equal = Formatter.generate_latex_table(results_equal, "FF5")
+    latex_q_equal = Formatter.generate_latex_table(results_equal, "Q")
+    latex_long_short_equal = Formatter.generate_long_short_latex_table(long_short_results_equal)
+
+    results_value, long_short_results_value = value_factor_model_analyzer.analyze()
+    ff3_value, ff5_value, q_value = Formatter.results_to_strings(results_value)
+    long_short_value = Formatter.long_short_res_to_string(long_short_results_value)
+    latex_ff3_value = Formatter.generate_latex_table(results_value, "FF3")
+    latex_ff5_value = Formatter.generate_latex_table(results_value, "FF5")
+    latex_q_value = Formatter.generate_latex_table(results_value, "Q")
+    latex_long_short_value = Formatter.generate_long_short_latex_table(long_short_results_value)
+
+    beta_mean, beta_std, t_stat, n = fama_macbeth_analyzer.analyze()
+    fama_macbeth_res = Formatter.fama_macbeth_res_to_string(beta_mean, beta_std, t_stat, n)
+    latex_fama_macbeth = Formatter.generate_fama_macbeth_latex_table(beta_mean, beta_std, t_stat, n)
+
+    basedir = os.path.abspath(os.path.dirname(__file__))
+    result_dir = os.path.join(basedir, "static", "downloads")
+    os.makedirs(result_dir, exist_ok=True)
+
+    session_id = str(uuid.uuid4())
+    zip_filename = f"{session_id}_results.zip"
+    zip_path = os.path.join(result_dir, zip_filename)
+
+    latex_output = Formatter.create_complete_latex_document(
+                        latex_ff3_equal, 
+                        latex_ff5_equal, 
+                        latex_q_equal, 
+                        latex_long_short_equal,
+                        latex_ff3_value,
+                        latex_ff5_value,
+                        latex_q_value,
+                        latex_long_short_value,
+                        latex_fama_macbeth
+                    )
+
+    results = {
+        "ff3_equal.txt": ff3_equal,
+        "ff5_equal.txt": ff5_equal,
+        "q_equal.txt": q_equal,
+        "long_short_equal.txt": long_short_equal,
+        "ff3_value.txt": ff3_value,
+        "ff5_value.txt": ff5_value,
+        "q_value.txt": q_value,
+        "long_short_value.txt": long_short_value,
+        "fama_macbeth.txt": fama_macbeth_res,
+        "output.tex": latex_output,
+    }
+
+    with zipfile.ZipFile(zip_path, 'w') as zipf:
+        for filename, content in results.items():
+            temp_file = os.path.join(result_dir, f"{session_id}_{filename}")
+            with open(temp_file, 'w', encoding='utf-8') as f:
+                f.write(str(content))
+            zipf.write(temp_file, arcname=filename)
+
+            if filename == "output.tex":
+                pdf_temp_path = os.path.join(result_dir, f"{session_id}_output.pdf")
+                Formatter.tex_file_to_pdf(temp_file, pdf_temp_path)
+                zipf.write(pdf_temp_path, arcname="output.pdf")
+                os.remove(pdf_temp_path)
+
+            os.remove(temp_file)
+
+    return zip_path
