@@ -42,7 +42,6 @@ def worker():
             )
 
         finally:
-            print("finished")
             task_queue.task_done()
 
             # Clean downloads directory after mail has been sent
