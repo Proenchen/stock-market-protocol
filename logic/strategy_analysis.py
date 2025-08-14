@@ -1,7 +1,7 @@
+import re
 import os
 import numpy as np
 import pandas as pd
-import uuid
 import zipfile
 import statsmodels.api as sm
 from abc import ABC, abstractmethod
@@ -379,7 +379,7 @@ class FamaMacBethAnalyzer(BaseAnalyzer):
         return beta_mean, beta_std, t_stat, n
 
 
-def run_analysis(df: pd.DataFrame):
+def run_analysis(df: pd.DataFrame, signal_name: str):
     print(0)
     equal_factor_model_analyzer = EqualWeightedFactorModelAnalyzer(df)
     value_factor_model_analyzer = ValueWeightedFactorModelAnalyzer(df)
@@ -410,8 +410,8 @@ def run_analysis(df: pd.DataFrame):
     result_dir = os.path.join(static_dir, "downloads")
     os.makedirs(result_dir, exist_ok=True)
     print(5)
-    session_id = str(uuid.uuid4())
-    zip_filename = f"{session_id}_results.zip"
+    safe_signal_name = re.sub(r'[^A-Za-z0-9_-]', '_', signal_name)  # only safe characters
+    zip_filename = f"{safe_signal_name}.zip"
     zip_path = os.path.join(result_dir, zip_filename)
 
     latex_output = Formatter.create_complete_latex_document(
@@ -441,13 +441,20 @@ def run_analysis(df: pd.DataFrame):
 
     with zipfile.ZipFile(zip_path, 'w') as zipf:
         for filename, content in results.items():
-            temp_file = os.path.join(result_dir, f"{session_id}_{filename}")
+            temp_file = os.path.join(result_dir, f"{safe_signal_name}_{filename}")
             with open(temp_file, 'w', encoding='utf-8') as f:
                 f.write(str(content))
-            zipf.write(temp_file, arcname=filename)
+
+            if filename in ("output.tex", "output.pdf"):
+                arcname = filename
+            else:
+                arcname = os.path.join("raw", filename)
+
+            zipf.write(temp_file, arcname=arcname)
             print(6)
+
             if filename == "output.tex":
-                pdf_temp_path = os.path.join(result_dir, f"{session_id}_output.pdf")
+                pdf_temp_path = os.path.join(result_dir, f"{safe_signal_name}_output.pdf")
                 Formatter.tex_file_to_pdf(temp_file, pdf_temp_path)
                 zipf.write(pdf_temp_path, arcname="output.pdf")
                 os.remove(pdf_temp_path)

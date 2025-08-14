@@ -1,4 +1,4 @@
-import os
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -206,7 +206,7 @@ class Formatter:
         q_value_tex: str, 
         long_short_value_tex: str,
         fama_macbeth_tex: str,
-        title: str = "Factor Model Regression Results"
+        title: str = "Global Stock Market Protocol Analysis Results"
     ) -> str:
         """
         Wraps given LaTeX tables into a complete .tex document.
@@ -308,6 +308,6 @@ class Formatter:
             if not generated_pdf.exists():
                 raise FileNotFoundError("PDF was not generated. Check your LaTeX code.")
 
-            os.rename(generated_pdf, output_path)
+            shutil.move(str(generated_pdf), str(output_path))
 
         return str(output_path)
