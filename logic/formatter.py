@@ -1,3 +1,5 @@
+import numpy as np
+import pandas as pd
 import shutil
 import subprocess
 import tempfile
@@ -27,15 +29,36 @@ class Formatter:
         return output
     
     @staticmethod
-    def fama_macbeth_res_to_string(beta_mean, beta_std, t_stat, n) -> str:
-        result_str = "Fama-MacBeth Regression Result\n" \
-                     "------------------------------\n" \
-                     f"Mean Beta: {beta_mean:.4f}\n" \
-                     f"Std Dev:   {beta_std:.4f}\n" \
-                     f"T-Stat:    {t_stat:.4f}\n" \
-                     f"N Months:  {n}\n"
-        
-        return result_str
+    def fama_macbeth_res_to_string(model_name: str, means: pd.Series, tstats: pd.Series, n_months: int) -> str:
+        lines = [f"Fama-MacBeth Results for {model_name} (T={n_months} months)"]
+        for coef in means.index:
+            coef_name = "Intercept" if coef == "const" else coef
+            lines.append(f"{coef_name:10s}: {means[coef]:.4f}  (t={tstats[coef]:.2f})")
+        return "\n".join(lines)
+    
+    @staticmethod
+    def generate_fama_macbeth_two_pass_latex_table(model_name, means, tstats, n_months):
+        rows = []
+        for coef in means.index:
+            coef_name = "Intercept" if coef == "const" else coef
+            rows.append(
+                f"{coef_name} & {means[coef]:.4f} & {tstats[coef]:.2f} \\\\"
+            )
+        body = "\n".join(rows)
+        return (
+            "\\begin{table}[H]\n"
+            "\\centering\n"
+            "\\caption{Fama-MacBeth Results for " + model_name +
+            " (" + str(n_months) + " months)}\n"
+            "\\begin{tabular}{lrr}\n"
+            "\\toprule\n"
+            "Variable & Mean Estimate & T-Stat \\\\\n"
+            "\\midrule\n" +
+            body + "\n" +
+            "\\bottomrule\n"
+            "\\end{tabular}\n"
+            "\\end{table}\n"
+        )
                 
     @staticmethod
     def generate_latex_table(results_dict: dict, model_name: str) -> str:
@@ -53,7 +76,7 @@ class Formatter:
         factor_order = {
             'FF3': ['const', 'MKT', 'SMB', 'HML'],
             'FF5': ['const', 'MKT', 'SMB', 'HML', 'RMW', 'CMA'],
-            'Q':   ['const', 'MKT', 'IA', 'ROE', 'SIZE']
+            'Q':   ['const', 'MKT', 'SIZE', 'IA', 'ROE']
         }
 
         factor_labels = {
@@ -227,6 +250,7 @@ class Formatter:
 \usepackage{longtable}
 \usepackage{caption}
 \usepackage{amsmath}
+\usepackage{float}
 
 \title{""" + title + r"""}
 \date{\today}

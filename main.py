@@ -8,6 +8,8 @@ from flask import Flask, render_template, redirect, url_for, request
 from logic.mailing import Mail
 from logic.strategy_analysis import run_analysis
 
+import traceback
+
 app: Flask = Flask(__name__)
 
 # --- Task queue for sequential execution ---
@@ -41,9 +43,19 @@ def worker():
                 body=f"An error occurred during processing:\n\n{str(e)}"
             )
 
+            tb = traceback.extract_tb(e.__traceback__)
+            filename, lineno, func, text = tb[-1]   # letzte Stelle im Traceback
+            msg = (
+                f"An error occurred during processing:\n\n"
+                f"{str(e)}\n\n"
+                f"(File {filename}, line {lineno}, in {func})\n"
+                f"--> {text}"
+            )
+            print(msg)
+
         finally:
             task_queue.task_done()
-
+            print("finished")
             # Clean downloads directory after mail has been sent
             downloads_dir = os.path.join(
                 os.path.dirname(os.path.abspath(__file__)),
