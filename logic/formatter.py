@@ -48,8 +48,6 @@ class Formatter:
         return (
             "\\begin{table}[H]\n"
             "\\centering\n"
-            "\\caption{Fama-MacBeth Results for " + model_name +
-            " (" + str(n_months) + " months)}\n"
             "\\begin{tabular}{lrr}\n"
             "\\toprule\n"
             "Variable & Mean Estimate & T-Stat \\\\\n"
@@ -57,6 +55,7 @@ class Formatter:
             body + "\n" +
             "\\bottomrule\n"
             "\\end{tabular}\n"
+            "\\caption{Fama-MacBeth Results for " + model_name + "}\n"
             "\\end{table}\n"
         )
                 

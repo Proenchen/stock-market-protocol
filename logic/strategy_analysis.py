@@ -106,7 +106,7 @@ class BaseAnalyzer(ABC):
         data = pd.concat([y, X], axis=1).dropna()
         y2 = data.iloc[:, 0]
         X2 = sm.add_constant(data.iloc[:, 1:], has_constant='add')
-        return sm.OLS(y2, X2).fit(cov_type='HAC', cov_kwds={'maxlags': 6})
+        return sm.OLS(y2, X2).fit(cov_type='HAC', cov_kwds={'maxlags': 12})
 
     @abstractmethod
     def analyze(self) -> Any:
@@ -118,7 +118,7 @@ class BaseAnalyzer(ABC):
 
 class EqualWeightedFactorModelAnalyzer(BaseAnalyzer):
     """ Analyzer that performs Fama-French (3, 5, Q-Factor) regressions on signal-based portfolios. """
-    def analyze(self, industry_code: int | None = None) -> Tuple[dict, dict]:
+    def analyze(self, industry_code: int | None = None, country: str | None = None) -> Tuple[dict, dict]:
         # --- Signal: build slices at formation month t ---
         df_signal = self.prepare_signal_df(self.data)
         df_signal['year_month'] = df_signal['date'].dt.to_period('M')
@@ -133,6 +133,9 @@ class EqualWeightedFactorModelAnalyzer(BaseAnalyzer):
         df_crsp = self.crsp
         if industry_code is not None and 'ff12' in df_crsp.columns:
             df_crsp = df_crsp.loc[df_crsp['ff12'] == industry_code]
+
+        if country is not None and 'country' in df_crsp.columns:
+            df_crsp = df_crsp.loc[df_crsp['country'] == country]
 
         df_crsp = df_crsp.rename(columns={'DSCD': 'permno', 'DATE': 'date'}).copy()
         df_crsp['date'] = pd.to_datetime(df_crsp['date'])
@@ -186,7 +189,7 @@ class EqualWeightedFactorModelAnalyzer(BaseAnalyzer):
 
 class ValueWeightedFactorModelAnalyzer(BaseAnalyzer):
     """ Analyzer that performs Fama-French (3, 5, Q-Factor) regressions on value-weighted signal-based portfolios. """
-    def analyze(self, industry_code: int | None = None) -> Tuple[dict, dict]:
+    def analyze(self, industry_code: int | None = None, country: str | None = None) -> Tuple[dict, dict]:
         # --- Signal & slices at formation month t ---
         df_signal = self.prepare_signal_df(self.data)
         df_signal['year_month'] = df_signal['date'].dt.to_period('M')
@@ -200,6 +203,9 @@ class ValueWeightedFactorModelAnalyzer(BaseAnalyzer):
         df_crsp = self.crsp
         if industry_code is not None and 'ff12' in df_crsp.columns:
             df_crsp = df_crsp.loc[df_crsp['ff12'] == industry_code]
+
+        if country is not None and 'country' in df_crsp.columns:
+            df_crsp = df_crsp.loc[df_crsp['country'] == country]
 
         df_crsp = df_crsp.rename(columns={'DSCD': 'permno', 'DATE': 'date'}).copy()
         df_crsp['date'] = pd.to_datetime(df_crsp['date'])
@@ -267,8 +273,61 @@ class ValueWeightedFactorModelAnalyzer(BaseAnalyzer):
 
 
 class FamaMacBethAnalyzer(BaseAnalyzer):
-    def analyze(self, industry_code: int | None = None) -> dict:
-        # ---------- Slices & Returns (Equal-Weighted, identisch zu EqualWeightedFactorModelAnalyzer) ----------
+    def _fast_rolling_betas_per_slice(self, df_slice: pd.DataFrame, cols: list[str], window: int) -> pd.DataFrame:
+        """
+        Schnelles Rolling-OLS für Betas je Slice mit O(1)-Fenster-Updates.
+        Beta(t) verwendet Daten aus [t-window, ..., t-1] (kein Look-ahead).
+        """
+        # Nur vollständige Beobachtungen
+        df_slice = df_slice.sort_values("year_month").dropna(subset=["excess_ret"] + cols).reset_index(drop=True)
+        if df_slice.empty:
+            return pd.DataFrame(columns=["year_month"] + cols)
+
+        X = df_slice[cols].to_numpy(dtype=float)        # (T, K)
+        y = df_slice["excess_ret"].to_numpy(dtype=float) # (T,)
+        T, K = X.shape
+        if T < window or K == 0:
+            out = pd.DataFrame(columns=cols)
+            out["year_month"] = df_slice["year_month"].to_numpy()
+            return out
+
+        # Kumulative Summen
+        xnz = np.nan_to_num(X)
+        ynz = np.nan_to_num(y)
+        cs_xy = np.cumsum(xnz * ynz[:, None], axis=0)  # (T, K)
+
+        # Für X'X alle Paare (i,j)
+        XX = np.empty((T, K, K), dtype=float)
+        for i in range(K):
+            for j in range(i, K):
+                s = np.cumsum(xnz[:, i] * xnz[:, j])
+                XX[:, i, j] = s
+                if i != j:
+                    XX[:, j, i] = s
+
+        betas = np.full((T, K), np.nan, dtype=float)
+
+        # Beta für t nutzt Beobachtungen t-window .. t-1
+        for t in range(window, T):
+            lo, hi = t - window, t - 1
+
+            # Summen via cumsum-Differenz
+            s_xy = cs_xy[hi] - (cs_xy[lo - 1] if lo > 0 else 0.0)
+            s_xx = XX[hi]   - (XX[lo - 1]   if lo > 0 else 0.0)
+
+            # Numerische Stabilität
+            try:
+                b = np.linalg.solve(s_xx, s_xy)
+            except np.linalg.LinAlgError:
+                b = np.linalg.lstsq(s_xx + 1e-8 * np.eye(K), s_xy, rcond=None)[0]
+            betas[t] = b
+
+        out = pd.DataFrame(betas, columns=cols)
+        out["year_month"] = df_slice["year_month"].to_numpy()
+        return out
+
+    def analyze(self, industry_code: int | None = None, country: str | None = None, window: int = 60) -> dict:
+        # ---------- Equal-Weighted Slices & Returns (wie bei dir) ----------
         df_signal = self.prepare_signal_df(self.data)
         df_signal['year_month'] = df_signal['date'].dt.to_period('M')
         df_signal['slice'] = (
@@ -277,10 +336,11 @@ class FamaMacBethAnalyzer(BaseAnalyzer):
         )
         df_signal['ret_month'] = df_signal['year_month'] + 1  # t+1
 
-        # CRSP vorbereiten / filtern
         df_crsp = self.crsp
         if industry_code is not None and 'ff12' in df_crsp.columns:
             df_crsp = df_crsp.loc[df_crsp['ff12'] == industry_code]
+        if country is not None and 'country' in df_crsp.columns:
+            df_crsp = df_crsp.loc[df_crsp['country'] == country]
 
         df_crsp = df_crsp.rename(columns={'DSCD': 'permno', 'DATE': 'date'}).copy()
         df_crsp['date'] = pd.to_datetime(df_crsp['date'])
@@ -299,25 +359,12 @@ class FamaMacBethAnalyzer(BaseAnalyzer):
                         .rename(columns={'ret_month': 'year_month', 'RET_USD': 'port_ret'}))
         port_returns['year_month'] = port_returns['year_month'].astype('period[M]')
 
-        # Faktoren vorbereiten & Excess Returns
+        # Faktoren + Excess
         df_factors = self._prepare_factors()
         model_data = pd.merge(port_returns, df_factors, on='year_month', how='inner')
         model_data['excess_ret'] = model_data['port_ret'] - model_data['RF']
 
-        # ---------- First Pass: Zeitreihen-Betas je Slice ----------
-        def _estimate_slice_betas(model_cols: list[str]) -> dict[int, pd.Series]:
-            betas = {}
-            for q in sorted(model_data['slice'].unique()):
-                sub = model_data.loc[model_data['slice'] == q, ['excess_ret'] + model_cols].dropna()
-                if sub.empty:
-                    continue
-                X = sm.add_constant(sub[model_cols], has_constant='add')
-                y = sub['excess_ret']
-                res = sm.OLS(y, X).fit()
-                # nur Faktor-Betas (ohne const) behalten
-                betas[q] = res.params.drop(labels=['const'], errors='ignore')
-            return betas
-
+        # ---------- First Pass: Rolling-Betas bis t-1 (schnell) ----------
         specs = {
             "FF3": ['MKT', 'SMB', 'HML'],
             "FF5": ['MKT', 'SMB', 'HML', 'RMW', 'CMA'],
@@ -325,40 +372,43 @@ class FamaMacBethAnalyzer(BaseAnalyzer):
         }
 
         results = {}
+        months = sorted(model_data['year_month'].dropna().unique())
 
-        # ---------- Second Pass: Cross-Section je Monat ----------
         for mdl_name, cols in specs.items():
-            # Betas je Slice aus First Pass
-            betas_by_slice = _estimate_slice_betas(cols)
+            # Betas je Slice via Rolling (kein Look-ahead)
+            betas_all = []
+            for q in sorted(model_data['slice'].unique()):
+                sub = model_data.loc[model_data['slice'] == q, ['year_month', 'excess_ret'] + cols].copy()
+                betas_q = self._fast_rolling_betas_per_slice(sub, cols, window=window)
+                betas_q['slice'] = q
+                betas_all.append(betas_q)
 
-            # Monatliche Cross-Section: r_t (Excess) ~ const + Betas (fix aus First Pass)
-            monthly_coefs = []   # Liste von pd.Series mit Index: ['const'] + cols
-            months = sorted(model_data['year_month'].dropna().unique())
+            betas_df = pd.concat(betas_all, ignore_index=True) if betas_all else pd.DataFrame()
 
+            # ---------- Second Pass: Cross-Section je Monat ----------
+            monthly_coefs = []
             for t in months:
-                # y: Excess Returns aller Slices in Monat t
+                # Excess-Returns der Slices in Monat t
                 sub_t = model_data.loc[model_data['year_month'] == t, ['slice', 'excess_ret']].dropna()
                 if sub_t.empty:
                     continue
 
-                # auf Slices beschränken, für die wir Betas haben
-                available = [q for q in sub_t['slice'].unique() if q in betas_by_slice]
-                if len(available) < len(cols) + 1:  # mindestens K+1 Beobachtungen (plus Intercept)
+                # Betas(t) (die intern aus [t-window, t-1] geschätzt sind) mergen
+                bt = betas_df.loc[betas_df['year_month'] == t, ['slice'] + cols].dropna()
+                if bt.empty:
+                    continue
+                sub_t = sub_t.merge(bt, on='slice', how='inner')
+                if sub_t.shape[0] < len(cols) + 1:  # mind. K+1 Beobachtungen
                     continue
 
-                sub_t = sub_t[sub_t['slice'].isin(available)].copy()
-                # Design-Matrix: die fixen Betas der entsprechenden Slices
-                B = pd.DataFrame([betas_by_slice[int(q)] for q in sub_t['slice']]).reset_index(drop=True)
-                B.columns = cols  # sicherstellen, dass Reihenfolge stimmt
-                x_cs = sm.add_constant(B, has_constant='add')
-                y_cs = sub_t['excess_ret'].reset_index(drop=True)
-
+                x_cs = sm.add_constant(sub_t[cols], has_constant='add')
+                y_cs = sub_t['excess_ret']
                 try:
                     res_cs = sm.OLS(y_cs, x_cs).fit()
-                    monthly_coefs.append(res_cs.params)
                 except Exception:
-                    # Falls Matrix singulär o.ä., Monat überspringen
                     continue
+
+                monthly_coefs.append(res_cs.params)
 
             if len(monthly_coefs) == 0:
                 idx = ['const'] + cols
@@ -369,17 +419,16 @@ class FamaMacBethAnalyzer(BaseAnalyzer):
                 }
                 continue
 
-            coef_df = pd.DataFrame(monthly_coefs)  
-            T = coef_df.shape[0]
-
+            coef_df = pd.DataFrame(monthly_coefs)  # Zeilen sind Monate
+            tm = coef_df.shape[0]
             means = coef_df.mean(axis=0)
-            stds = coef_df.std(axis=0, ddof=1)
-            tstats = means / (stds / np.sqrt(T))
+            stds  = coef_df.std(axis=0, ddof=1)
+            tstats = means / (stds / np.sqrt(tm))
 
             results[mdl_name] = {
                 "means": means,
                 "tstats": tstats,
-                "n_months": int(T)
+                "n_months": int(tm)
             }
 
         return results
@@ -457,7 +506,7 @@ def run_analysis(df: pd.DataFrame, signal_name: str):
     # LaTeX: je Modell eine Tabelle (in die vorhandene FMB-Sektion einfügen)
     latex_fmb_parts = []
     for mdl in ["FF3", "FF5", "Q"]:
-        latex_fmb_parts.append(rf"\subsection{{Fama-MacBeth (Two-Pass): {mdl}}}")
+        latex_fmb_parts.append(rf"\subsection{{Fama-MacBeth: {mdl}}}")
         latex_fmb_parts.append(
             Formatter.generate_fama_macbeth_two_pass_latex_table(
                 mdl,
@@ -510,7 +559,7 @@ def run_analysis(df: pd.DataFrame, signal_name: str):
         "baseline/output.tex": latex_output,
     }
     print(5)
-    # ---------- Per-industry runs ----------
+    """     # ---------- Per-industry runs ----------
     industry_codes = sorted(pd.unique(crsp_full['ff12'].dropna().astype(int)))
     for code in industry_codes:
         code_int = int(code)
@@ -531,7 +580,7 @@ def run_analysis(df: pd.DataFrame, signal_name: str):
                     mdl, fmb_i[mdl]["means"], fmb_i[mdl]["tstats"], fmb_i[mdl]["n_months"]
                 )
             )
-            fm_i_latex_parts.append(rf"\subsection{{Fama-MacBeth (Two-Pass): {mdl}}}")
+            fm_i_latex_parts.append(rf"\subsection{{Fama-MacBeth: {mdl}}}")
             fm_i_latex_parts.append(
                 Formatter.generate_fama_macbeth_two_pass_latex_table(
                     mdl, fmb_i[mdl]["means"], fmb_i[mdl]["tstats"], fmb_i[mdl]["n_months"]
@@ -587,6 +636,85 @@ def run_analysis(df: pd.DataFrame, signal_name: str):
             f"{prefix}/output.tex": latex_output_i,
         })
     print(7)
+
+    # ---------- Per-country runs ----------
+    countries = sorted(pd.unique(crsp_full['country'].dropna().astype(str)))
+    for ctry in countries:
+        print(f"country={ctry}")
+        res_eq_cty, ls_eq_cty = equal_factor_model_analyzer.analyze(country=ctry)
+        ff3_eq_c, ff5_eq_c, q_eq_c = Formatter.results_to_strings(res_eq_cty)
+        ls_eq_c = Formatter.long_short_res_to_string(ls_eq_cty)
+
+        res_vw_cty, ls_vw_cty = value_factor_model_analyzer.analyze(country=ctry)
+        ff3_vw_c, ff5_vw_c, q_vw_c = Formatter.results_to_strings(res_vw_cty)
+        ls_vw_c = Formatter.long_short_res_to_string(ls_vw_cty)
+
+        fmb_c = fama_macbeth_analyzer.analyze(country=ctry)
+        fm_c_text_parts, fm_c_latex_parts = [], []
+        for mdl in ["FF3", "FF5", "Q"]:
+            fm_c_text_parts.append(
+                Formatter.fama_macbeth_res_to_string(
+                    mdl, fmb_c[mdl]["means"], fmb_c[mdl]["tstats"], fmb_c[mdl]["n_months"]
+                )
+            )
+            fm_c_latex_parts.append(rf"\subsection{{Fama-MacBeth: {mdl}}}")
+            fm_c_latex_parts.append(
+                Formatter.generate_fama_macbeth_two_pass_latex_table(
+                    mdl, fmb_c[mdl]["means"], fmb_c[mdl]["tstats"], fmb_c[mdl]["n_months"]
+                )
+            )
+
+        fm_c = "\n\n".join(fm_c_text_parts)
+
+        # Sauberer Ländername für Pfade/Titel
+        safe_country = re.sub(r'[^A-Za-z0-9_-]+', '_', str(ctry))
+        country_title = f"Global Stock Market Protocol Analysis Results for {escaped_signal} - Country {ctry}"
+
+        try:
+            latex_output_c = Formatter.create_complete_latex_document(
+                Formatter.generate_latex_table(res_eq_cty, "FF3"),
+                Formatter.generate_latex_table(res_eq_cty, "FF5"),
+                Formatter.generate_latex_table(res_eq_cty, "Q"),
+                Formatter.generate_long_short_latex_table(ls_eq_cty),
+
+                Formatter.generate_latex_table(res_vw_cty, "FF3"),
+                Formatter.generate_latex_table(res_vw_cty, "FF5"),
+                Formatter.generate_latex_table(res_vw_cty, "Q"),
+                Formatter.generate_long_short_latex_table(ls_vw_cty),
+
+                "\n".join(fm_c_latex_parts),
+                title=country_title
+            )
+        except TypeError:
+            latex_output_c = Formatter.create_complete_latex_document(
+                Formatter.generate_latex_table(res_eq_cty, "FF3"),
+                Formatter.generate_latex_table(res_eq_cty, "FF5"),
+                Formatter.generate_latex_table(res_eq_cty, "Q"),
+                Formatter.generate_long_short_latex_table(ls_eq_cty),
+
+                Formatter.generate_latex_table(res_vw_cty, "FF3"),
+                Formatter.generate_latex_table(res_vw_cty, "FF5"),
+                Formatter.generate_latex_table(res_vw_cty, "Q"),
+                Formatter.generate_long_short_latex_table(ls_vw_cty),
+
+                "\n".join(fm_c_latex_parts)
+            )
+            latex_output_c = _inject_title_fallback(latex_output_c, country_title)
+
+        prefix = f"countries/country_{safe_country}"
+        results.update({
+            f"{prefix}/ff3_equal.txt": ff3_eq_c,
+            f"{prefix}/ff5_equal.txt": ff5_eq_c,
+            f"{prefix}/q_equal.txt":   q_eq_c,
+            f"{prefix}/long_short_equal.txt": ls_eq_c,
+            f"{prefix}/ff3_value.txt": ff3_vw_c,
+            f"{prefix}/ff5_value.txt": ff5_vw_c,
+            f"{prefix}/q_value.txt":   q_vw_c,
+            f"{prefix}/long_short_value.txt": ls_vw_c,
+            f"{prefix}/fama_macbeth.txt": fm_c,
+            f"{prefix}/output.tex": latex_output_c,
+        }) """
+
     # ---------- Write ZIP ----------
     with zipfile.ZipFile(zip_path, 'w') as zipf:
         for filename, content in results.items():
