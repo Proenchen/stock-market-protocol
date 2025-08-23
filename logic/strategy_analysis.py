@@ -1,275 +1,202 @@
-from __future__ import annotations
+from __future__ import annotations 
 
-import re
-import os
-import numpy as np
-import pandas as pd
-import zipfile
-import statsmodels.api as sm
-from abc import ABC, abstractmethod
-from typing import Tuple, Any
+import re 
+import os 
+import numpy as np 
+import pandas as pd 
+import zipfile 
+import statsmodels.api as sm 
+
+from abc import ABC, abstractmethod 
+from typing import Tuple, Any 
 from logic.formatter import Formatter
 
-# Constants
-#------------------
 
 NUM_OF_SLICES = 10
 
-#------------------
-
 
 class BaseAnalyzer(ABC):
-    """Implements an abstract analyzer for stock return predictors."""
+    """Abstract analyzer for stock return predictors."""
 
     def __init__(self, input_file: pd.DataFrame, crsp: pd.DataFrame | None = None, factors: pd.DataFrame | None = None) -> None:
-        """Creates a new abstract analyzer.
-        
-        Args:
-            input_file (pd.DataFrame): Data frame of the input file (.csv or .xlsx) 
-                                       which contains data corresponding to the portfolio strategy.
-        """
         self.data = input_file
         self.crsp = crsp if crsp is not None else pd.read_csv("./data/dsws_crsp.csv")
         self.factors = factors if factors is not None else pd.read_csv("./data/Factors.csv")
 
-    def prepare_signal_df(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Standardize a 3-column input DataFrame to columns: permno, date, signal.
-        """
-        if df.shape[1] != 3:
-            raise ValueError("Input data must have exactly 3 columns.")
-        df_signal = df.copy()
-        df_signal.columns = ['permno', 'date', 'signal']
-        df_signal['date'] = pd.to_datetime(df_signal['date'])
-        df_signal['year_month'] = df_signal['date'].dt.to_period('M')
-        return df_signal
-    
-    def _prepare_factors(self) -> pd.DataFrame:
-        df_factors = self.factors.copy()
-
-        df_factors['DATE'] = pd.to_datetime(df_factors['DATE'], errors='coerce')
-        df_factors['year_month'] = df_factors['DATE'].dt.to_period('M')
-
-        cols_raw = [
-            'MKTRF_usd','SMB_usd','HML_usd','RMW_usd','CMA_usd',
-            'ME_usd','IA_usd','ROE_usd','rf_ff','MKT_usd'
-        ]
-        for c in cols_raw:
-            if c in df_factors.columns:
-                s = pd.to_numeric(df_factors[c], errors='coerce')
-                if s.dropna().abs().median() > 0.5:
-                    s = s / 100.0
-                df_factors[c] = s
-
-        df_factors = df_factors.rename(columns={
-            'MKTRF_usd': 'MKT',  
-            'SMB_usd':  'SMB',
-            'HML_usd':  'HML',
-            'RMW_usd':  'RMW',
-            'CMA_usd':  'CMA',
-            'rf_ff':    'RF',
-            'ME_usd':   'SIZE',
-            'ROE_usd':  'ROE',
-            'IA_usd':   'IA'
-        })
-
-        return df_factors
-
-    def compute_long_short_regression(self, port_returns: pd.DataFrame, df_factors: pd.DataFrame) -> dict:
-        """
-        Computes long-short portfolio (Slice 10 - Slice 1) returns and regresses on FF3, FF5, Q models.
-        """
-        pivot = port_returns.pivot(index='year_month', columns='slice', values='port_ret')
-        if 1 not in pivot.columns or NUM_OF_SLICES not in pivot.columns:
-            raise ValueError("Long-Short regression skipped: lowest or highest slice not found.")
-
-        pivot['long_short'] = pivot[NUM_OF_SLICES] - pivot[1]
-        ls_returns = pivot[['long_short']].reset_index()
-
-        if {'MKT','SMB','HML','RMW','CMA','SIZE','IA','ROE'}.issubset(set(df_factors.columns)) is False:
-            df_factors = df_factors.copy()
-            if 'DATE' in df_factors.columns:
-                df_factors['DATE'] = pd.to_datetime(df_factors['DATE'], errors='coerce')
-                df_factors['year_month'] = df_factors['DATE'].dt.to_period('M')
-
-        df_factors_std = self._prepare_factors()
-
-        df = pd.merge(ls_returns, df_factors_std, on='year_month', how='inner')
-
-        res_ff3 = self._run_ols_hac(df['long_short'], df[['MKT','SMB','HML']])
-        res_ff5 = self._run_ols_hac(df['long_short'], df[['MKT','SMB','HML','RMW','CMA']])
-        res_q   = self._run_ols_hac(df['long_short'], df[['MKT','SIZE','IA','ROE']])
-
-        return {"FF3": res_ff3, "FF5": res_ff5, "Q": res_q}
-
-    def _run_ols_hac(self, y: pd.Series, X: pd.DataFrame):
-        data = pd.concat([y, X], axis=1).dropna()
-        y2 = data.iloc[:, 0]
-        X2 = sm.add_constant(data.iloc[:, 1:], has_constant='add')
-        return sm.OLS(y2, X2).fit(cov_type='HAC', cov_kwds={'maxlags': 12})
-
     @abstractmethod
     def analyze(self) -> Any:
-        """
-        Abstract method to perform analysis on the loaded data.
-        """
         pass
-    
+
 
 class EqualWeightedFactorModelAnalyzer(BaseAnalyzer):
-    """ Analyzer that performs Fama-French (3, 5, Q-Factor) regressions on signal-based portfolios. """
-    def analyze(self, industry_code: int | None = None, country: str | None = None) -> Tuple[dict, dict]:
-        # --- Signal: build slices at formation month t ---
-        df_signal = self.prepare_signal_df(self.data)
-        df_signal['year_month'] = df_signal['date'].dt.to_period('M')
-        df_signal['slice'] = (
-            df_signal.groupby('year_month')['signal']
-                     .transform(lambda x: pd.qcut(x, NUM_OF_SLICES, labels=False, duplicates='drop') + 1)
+    """Fama–French (3/5/Q) Regressions auf equal-weighted Portfolios."""
+    def analyze(self) -> Tuple[dict, dict]:
+        # --- Input & Monat ---
+        df = self.data.copy()
+        # Eingabedatei-Spalten umbenennen: 1=DSCD, 2=dates, 3=signal
+        df = df.rename(columns={df.columns[0]: "DSCD",
+                                df.columns[1]: "dates",
+                                df.columns[2]: "signal"})
+        df["date"] = pd.to_datetime(df["dates"])
+        df["month"] = df["date"].dt.to_period("M").dt.to_timestamp("M")
+
+        # --- CRSP joinen ---
+        cr = self.crsp.copy()
+        cr["DATE"] = pd.to_datetime(cr["DATE"])
+        cr["month"] = cr["DATE"].dt.to_period("M").dt.to_timestamp("M")
+        cr_small = cr[["DSCD", "month", "RET_USD", "size_lag"]]
+        df = pd.merge(df, cr_small, on=["DSCD", "month"], how="inner")
+
+        # --- Returns & Signal ---
+        df["ret"] = pd.to_numeric(df["RET_USD"], errors="coerce")
+        df["signal"] = pd.to_numeric(df["signal"], errors="coerce")
+
+        # --- 1) Dezile ---
+        def assign_deciles(g: pd.DataFrame) -> pd.DataFrame:
+            try:
+                g["decile"] = pd.qcut(g["signal"], NUM_OF_SLICES, labels=range(1, NUM_OF_SLICES + 1))
+            except ValueError:
+                r = g["signal"].rank(method="first")
+                g["decile"] = pd.qcut(r, NUM_OF_SLICES, labels=range(1, NUM_OF_SLICES + 1))
+            g["decile"] = g["decile"].astype(int)
+            return g
+        df = df.groupby("month").apply(assign_deciles, include_groups=False)
+
+        # --- 2) Equal-weighted Returns ---
+        def ewret(g: pd.DataFrame) -> float:
+            v = g["ret"].dropna()
+            return float(v.mean()) if len(v) else np.nan
+        decile_rets = (
+            df.groupby(["month", "decile"])
+              .apply(ewret, include_groups=False)
+              .rename("ewret")
+              .reset_index()
         )
-        # ret month = t+1
-        df_signal['ret_month'] = df_signal['year_month'] + 1
+        decile_wide = decile_rets.pivot(index="month", columns="decile", values="ewret").sort_index()
 
-        # --- CRSP: filter, types, decimals ---
-        df_crsp = self.crsp
-        if industry_code is not None and 'ff12' in df_crsp.columns:
-            df_crsp = df_crsp.loc[df_crsp['ff12'] == industry_code]
+        # --- 3) Faktoren ---
+        fac = self.factors.copy()
+        fac["month"] = pd.to_datetime(fac["DATE"]).dt.to_period("M").dt.to_timestamp("M")
+        fac = fac.set_index("month").sort_index()
 
-        if country is not None and 'country' in df_crsp.columns:
-            df_crsp = df_crsp.loc[df_crsp['country'] == country]
+        model_specs = {
+            "FF3": ["MKTRF_usd", "SMB_usd", "HML_usd"],
+            "FF5": ["MKTRF_usd", "SMB_usd", "HML_usd", "RMW_A_usd", "CMA_usd"],
+            "Q"  : ["MKTRF_usd", "ME_usd", "IA_usd", "ROE_usd"],
+        }
 
-        df_crsp = df_crsp.rename(columns={'DSCD': 'permno', 'DATE': 'date'}).copy()
-        df_crsp['date'] = pd.to_datetime(df_crsp['date'])
-        df_crsp['year_month'] = df_crsp['date'].dt.to_period('M')
-        df_crsp['RET_USD'] = df_crsp['RET_USD'] / 100.0  # percent to decimal
+        # --- 4) Excess-Returns & LS ---
+        decile_wide_ex = decile_wide.sub(fac["rf_ff"], axis=0)
+        ls_ex = decile_wide_ex[NUM_OF_SLICES] - decile_wide_ex[1]
 
-        # --- Map t slices to returns at t+1 ---
-        ret_t1 = df_crsp[['permno', 'year_month', 'RET_USD']].rename(columns={'year_month': 'ret_month'})
-        merged = (df_signal[['permno', 'year_month', 'ret_month', 'slice']]
-                  .merge(ret_t1, on=['permno', 'ret_month'], how='inner'))
+        # --- 5) Helper ---
+        def fit_ols(y: pd.Series, X: pd.DataFrame):
+            Xc = sm.add_constant(X)
+            mask = y.notna() & Xc.notna().all(axis=1)
+            return sm.OLS(y[mask], Xc[mask]).fit()
 
-        # --- Equal-weighted portfolio returns (indexed by return month) ---
-        port_returns = (merged.groupby(['ret_month', 'slice'])['RET_USD']
-                        .mean()
-                        .reset_index()
-                        .rename(columns={'ret_month': 'year_month', 'RET_USD': 'port_ret'}))
-        port_returns['year_month'] = port_returns['year_month'].astype('period[M]')
+        # --- 6) Regression ---
+        dec_nums = list(range(1, NUM_OF_SLICES + 1))
+        ts_dec = decile_wide_ex.join(fac, how="inner").sort_index()
+        ts_ls  = pd.DataFrame({"LS_ex": ls_ex}).join(fac, how="inner").sort_index()
 
-        # --- Factors: rename, decimals, align on return month ---
-        df_factors = self._prepare_factors()
+        results_equal = {i: {} for i in dec_nums}
+        long_short_results_equal = {}
 
-        # --- Merge & regress (excess returns for invested portfolios) ---
-        model_data = pd.merge(port_returns, df_factors, on='year_month', how='inner')
-        model_data['excess_ret'] = model_data['port_ret'] - model_data['RF']
+        for label, fac_cols in model_specs.items():
+            long_short_results_equal[label] = fit_ols(ts_ls["LS_ex"], ts_ls[fac_cols])
+            for i in dec_nums:
+                results_equal[i][label] = fit_ols(ts_dec[i], ts_dec[fac_cols])
 
-        results = {}
-        for q in sorted(model_data['slice'].unique()):
-            subset = model_data[model_data['slice'] == q]
-            # FF3
-            res_ff3 = self._run_ols_hac(
-                subset['excess_ret'],
-                subset[['MKT', 'SMB', 'HML']]
-            )
-            # FF5
-            res_ff5 = self._run_ols_hac(
-                subset['excess_ret'],
-                subset[['MKT', 'SMB', 'HML', 'RMW', 'CMA']]
-            )
-            # Q
-            res_q = self._run_ols_hac(
-                subset['excess_ret'],
-                subset[['MKT', 'SIZE', 'IA', 'ROE']]
-            )
-
-            results[q] = {'FF3': res_ff3, 'FF5': res_ff5, 'Q': res_q}
-
-        long_short_res = self.compute_long_short_regression(port_returns, df_factors)  # use raw LS inside
-        return results, long_short_res
-        
+        return results_equal, long_short_results_equal
 
 
 class ValueWeightedFactorModelAnalyzer(BaseAnalyzer):
-    """ Analyzer that performs Fama-French (3, 5, Q-Factor) regressions on value-weighted signal-based portfolios. """
-    def analyze(self, industry_code: int | None = None, country: str | None = None) -> Tuple[dict, dict]:
-        # --- Signal & slices at formation month t ---
-        df_signal = self.prepare_signal_df(self.data)
-        df_signal['year_month'] = df_signal['date'].dt.to_period('M')
-        df_signal['slice'] = (
-            df_signal.groupby('year_month')['signal']
-                     .transform(lambda x: pd.qcut(x, NUM_OF_SLICES, labels=False, duplicates='drop') + 1)
+    """Fama–French (3/5/Q) Regressions auf value-weighted Portfolios."""
+    def analyze(self) -> Tuple[dict, dict]:
+        # --- Input & Monat ---
+        df = self.data.copy()
+        df = df.rename(columns={df.columns[0]: "DSCD",
+                                df.columns[1]: "dates",
+                                df.columns[2]: "signal"})
+        df["date"] = pd.to_datetime(df["dates"])
+        df["month"] = df["date"].dt.to_period("M").dt.to_timestamp("M")
+
+        # --- CRSP joinen ---
+        cr = self.crsp.copy()
+        cr["DATE"] = pd.to_datetime(cr["DATE"])
+        cr["month"] = cr["DATE"].dt.to_period("M").dt.to_timestamp("M")
+        cr_small = cr[["DSCD", "month", "RET_USD", "size_lag"]]
+        df = pd.merge(df, cr_small, on=["DSCD", "month"], how="inner")
+
+        # --- Returns, Signal, Gewichte ---
+        df["ret"] = pd.to_numeric(df["RET_USD"], errors="coerce")
+        df["signal"] = pd.to_numeric(df["signal"], errors="coerce")
+        df["weight"] = pd.to_numeric(df["size_lag"], errors="coerce").clip(lower=0).fillna(0.0)
+
+        # --- 1) Dezile ---
+        def assign_deciles(g: pd.DataFrame) -> pd.DataFrame:
+            try:
+                g["decile"] = pd.qcut(g["signal"], NUM_OF_SLICES, labels=range(1, NUM_OF_SLICES + 1))
+            except ValueError:
+                r = g["signal"].rank(method="first")
+                g["decile"] = pd.qcut(r, NUM_OF_SLICES, labels=range(1, NUM_OF_SLICES + 1))
+            g["decile"] = g["decile"].astype(int)
+            return g
+        df = df.groupby("month").apply(assign_deciles, include_groups=False)
+
+        # --- 2) Value-weighted Returns ---
+        def vwret(g: pd.DataFrame) -> float:
+            w = pd.to_numeric(g["weight"], errors="coerce")
+            r = pd.to_numeric(g["ret"], errors="coerce")
+            m = w.notna() & r.notna() & (w > 0)
+            if not m.any():
+                return np.nan
+            return float(np.average(r[m], weights=w[m]))
+
+        decile_rets = (
+            df.groupby(["month", "decile"])
+              .apply(vwret, include_groups=False)
+              .rename("vwret")
+              .reset_index()
         )
-        df_signal['ret_month'] = df_signal['year_month'] + 1  # t+1
+        decile_wide = decile_rets.pivot(index="month", columns="decile", values="vwret").sort_index()
 
-        # --- CRSP prep ---
-        df_crsp = self.crsp
-        if industry_code is not None and 'ff12' in df_crsp.columns:
-            df_crsp = df_crsp.loc[df_crsp['ff12'] == industry_code]
+        # --- 3) Faktoren ---
+        fac = self.factors.copy()
+        fac["month"] = pd.to_datetime(fac["DATE"]).dt.to_period("M").dt.to_timestamp("M")
+        fac = fac.set_index("month").sort_index()
 
-        if country is not None and 'country' in df_crsp.columns:
-            df_crsp = df_crsp.loc[df_crsp['country'] == country]
+        model_specs = {
+            "FF3": ["MKTRF_usd", "SMB_usd", "HML_usd"],
+            "FF5": ["MKTRF_usd", "SMB_usd", "HML_usd", "RMW_A_usd", "CMA_usd"],
+            "Q"  : ["MKTRF_usd", "ME_usd", "IA_usd", "ROE_usd"],
+        }
 
-        df_crsp = df_crsp.rename(columns={'DSCD': 'permno', 'DATE': 'date'}).copy()
-        df_crsp['date'] = pd.to_datetime(df_crsp['date'])
-        df_crsp['year_month'] = df_crsp['date'].dt.to_period('M')
+        # --- 4) Excess-Returns & LS ---
+        decile_wide_ex = decile_wide.sub(fac["rf_ff"], axis=0)
+        ls_ex = decile_wide_ex[NUM_OF_SLICES] - decile_wide_ex[1]
 
-        # Ensure numeric & decimals
-        df_crsp['RET_USD'] = df_crsp['RET_USD'] / 100.0  # percent to decimal
-        if 'size_lag' in df_crsp.columns:
-            df_crsp['size_lag'] = pd.to_numeric(df_crsp['size_lag'], errors='coerce')
+        # --- 5) Helper ---
+        def fit_ols(y: pd.Series, X: pd.DataFrame):
+            Xc = sm.add_constant(X)
+            mask = y.notna() & Xc.notna().all(axis=1)
+            return sm.OLS(y[mask], Xc[mask]).fit()
 
-        # Split out returns at t+1 and sizes at t
-        ret_t1  = df_crsp[['permno', 'year_month', 'RET_USD']].rename(columns={'year_month': 'ret_month'})
-        size_t  = df_crsp[['permno', 'year_month', 'size_lag']].rename(columns={'year_month': 'formation_month'})
+        # --- 6) Regression ---
+        dec_nums = list(range(1, NUM_OF_SLICES + 1))
+        ts_dec = decile_wide_ex.join(fac, how="inner").sort_index()
+        ts_ls  = pd.DataFrame({"LS_ex": ls_ex}).join(fac, how="inner").sort_index()
 
-        # --- Join: slices at t, sizes at t, returns at t+1 ---
-        formed = (df_signal[['permno', 'year_month', 'ret_month', 'slice']]
-                  .rename(columns={'year_month': 'formation_month'}))
+        results_value = {i: {} for i in dec_nums}
+        long_short_results_value = {}
 
-        merged = (formed
-                  .merge(ret_t1, on=['permno', 'ret_month'], how='inner')
-                  .merge(size_t, on=['permno', 'formation_month'], how='left'))
+        for label, fac_cols in model_specs.items():
+            long_short_results_value[label] = fit_ols(ts_ls["LS_ex"], ts_ls[fac_cols])
+            for i in dec_nums:
+                results_value[i][label] = fit_ols(ts_dec[i], ts_dec[fac_cols])
 
-        merged = merged.dropna(subset=['RET_USD', 'size_lag'])
-
-        # --- VW portfolio returns by return month ---
-        merged['weighted_ret'] = merged['RET_USD'] * merged['size_lag']
-        port_returns = (merged
-            .groupby(['ret_month', 'slice'])
-            .agg(total_ret=('weighted_ret', 'sum'), total_size=('size_lag', 'sum'))
-            .assign(port_ret=lambda d: d['total_ret'] / d['total_size'])
-            .reset_index()
-            .rename(columns={'ret_month': 'year_month'}))
-        port_returns['year_month'] = port_returns['year_month'].astype('period[M]')
-
-        # --- Factors: rename, decimals, align on return month ---
-        df_factors = self._prepare_factors()
-
-        # --- Merge & regress (excess returns for invested portfolios) ---
-        model_data = pd.merge(port_returns, df_factors, on='year_month', how='inner')
-        model_data['excess_ret'] = model_data['port_ret'] - model_data['RF']
-
-        results = {}
-        for q in sorted(model_data['slice'].unique()):
-            subset = model_data[model_data['slice'] == q]
-            # FF3
-            res_ff3 = self._run_ols_hac(
-                subset['excess_ret'],
-                subset[['MKT', 'SMB', 'HML']]
-            )
-            # FF5
-            res_ff5 = self._run_ols_hac(
-                subset['excess_ret'],
-                subset[['MKT', 'SMB', 'HML', 'RMW', 'CMA']]
-            )
-            # Q
-            res_q = self._run_ols_hac(
-                subset['excess_ret'],
-                subset[['MKT', 'SIZE', 'IA', 'ROE']]
-            )
-
-            results[q] = {'FF3': res_ff3, 'FF5': res_ff5, 'Q': res_q}
-
-        long_short_res = self.compute_long_short_regression(port_returns, df_factors)  # use raw LS inside
-        return results, long_short_res
+        return results_value, long_short_results_value
 
 
 class FamaMacBethAnalyzer(BaseAnalyzer):
@@ -471,7 +398,7 @@ def run_analysis(df: pd.DataFrame, signal_name: str):
 
     equal_factor_model_analyzer = EqualWeightedFactorModelAnalyzer(df, crsp=crsp_full, factors=factors_full)
     value_factor_model_analyzer = ValueWeightedFactorModelAnalyzer(df, crsp=crsp_full, factors=factors_full)
-    fama_macbeth_analyzer = FamaMacBethAnalyzer(df, crsp=crsp_full, factors=factors_full)
+    #fama_macbeth_analyzer = FamaMacBethAnalyzer(df, crsp=crsp_full, factors=factors_full)
     print(0)
     # ---------- Baseline (all industries) ----------
     results_equal, long_short_results_equal = equal_factor_model_analyzer.analyze()
@@ -490,7 +417,7 @@ def run_analysis(df: pd.DataFrame, signal_name: str):
     latex_q_value = Formatter.generate_latex_table(results_value, "Q")
     latex_long_short_value = Formatter.generate_long_short_latex_table(long_short_results_value)
     print(2)
-    fmb_all = fama_macbeth_analyzer.analyze()
+    """ fmb_all = fama_macbeth_analyzer.analyze()
     fmb_text_parts = []
     for mdl in ["FF3", "FF5", "Q"]:
         fmb_text_parts.append(
@@ -501,10 +428,10 @@ def run_analysis(df: pd.DataFrame, signal_name: str):
                 fmb_all[mdl]["n_months"]
             )
         )
-    fama_macbeth_res = "\n\n".join(fmb_text_parts)
+    fama_macbeth_res = "\n\n".join(fmb_text_parts) """
 
     # LaTeX: je Modell eine Tabelle (in die vorhandene FMB-Sektion einfügen)
-    latex_fmb_parts = []
+    """ latex_fmb_parts = []
     for mdl in ["FF3", "FF5", "Q"]:
         latex_fmb_parts.append(rf"\subsection{{Fama-MacBeth: {mdl}}}")
         latex_fmb_parts.append(
@@ -515,7 +442,7 @@ def run_analysis(df: pd.DataFrame, signal_name: str):
                 fmb_all[mdl]["n_months"]
             )
         )
-    latex_fama_macbeth = "\n".join(latex_fmb_parts)
+    latex_fama_macbeth = "\n".join(latex_fmb_parts) """
     print(3)
     escaped_signal = _latex_escape(signal_name)
 
@@ -525,14 +452,14 @@ def run_analysis(df: pd.DataFrame, signal_name: str):
         latex_output = Formatter.create_complete_latex_document(
             latex_ff3_equal, latex_ff5_equal, latex_q_equal, latex_long_short_equal,
             latex_ff3_value, latex_ff5_value, latex_q_value, latex_long_short_value,
-            latex_fama_macbeth,
+            "",
             title=baseline_title,         
         )
     except TypeError:
         latex_output = Formatter.create_complete_latex_document(
             latex_ff3_equal, latex_ff5_equal, latex_q_equal, latex_long_short_equal,
             latex_ff3_value, latex_ff5_value, latex_q_value, latex_long_short_value,
-            latex_fama_macbeth
+            ""
         )
         latex_output = _inject_title_fallback(latex_output, baseline_title)
     print(4)
@@ -555,7 +482,7 @@ def run_analysis(df: pd.DataFrame, signal_name: str):
         "baseline/ff5_value.txt": ff5_value,
         "baseline/q_value.txt": q_value,
         "baseline/long_short_value.txt": long_short_value,
-        "baseline/fama_macbeth.txt": fama_macbeth_res,
+        #"baseline/fama_macbeth.txt": fama_macbeth_res,
         "baseline/output.tex": latex_output,
     }
     print(5)

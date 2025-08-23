@@ -73,21 +73,21 @@ class Formatter:
         """
 
         factor_order = {
-            'FF3': ['const', 'MKT', 'SMB', 'HML'],
-            'FF5': ['const', 'MKT', 'SMB', 'HML', 'RMW', 'CMA'],
-            'Q':   ['const', 'MKT', 'SIZE', 'IA', 'ROE']
+            "FF3": ["const", "MKTRF_usd", "SMB_usd", "HML_usd"],
+            "FF5": ["const", "MKTRF_usd", "SMB_usd", "HML_usd", "RMW_A_usd", "CMA_usd"],
+            "Q"  : ["const", "MKTRF_usd", "ME_usd", "IA_usd", "ROE_usd"]
         }
 
         factor_labels = {
             'const': r'$\alpha$',
-            'MKT': r'$\beta_{MKT}$',
-            'SMB': r'$\beta_{SMB}$',
-            'HML': r'$\beta_{HML}$',
-            'RMW': r'$\beta_{RMW}$',
-            'CMA': r'$\beta_{CMA}$',
-            'SIZE': r'$\beta_{SIZE}$',
-            'IA': r'$\beta_{IA}$',
-            'ROE': r'$\beta_{ROE}$'
+            'MKTRF_usd': r'$\beta_{MKT}$',
+            'SMB_usd': r'$\beta_{SMB}$',
+            'HML_usd': r'$\beta_{HML}$',
+            'RMW_A_usd': r'$\beta_{RMW}$',
+            'CMA_usd': r'$\beta_{CMA}$',
+            'ME_usd': r'$\beta_{SIZE}$',
+            'IA_usd': r'$\beta_{IA}$',
+            'ROE_usd': r'$\beta_{ROE}$'
         }
 
         # Table header
@@ -145,19 +145,19 @@ class Formatter:
         }
 
         # Desired fixed order of all potential factors
-        all_factors = ['const', 'MKT', 'SMB', 'HML', 'RMW', 'CMA', 'IA', 'ROE', 'SIZE']
+        all_factors = ["const", "MKTRF_usd", "SMB_usd", "HML_usd", "RMW_A_usd", "CMA_usd", "ME_usd", "IA_usd", "ROE_usd"]
 
         # LaTeX-friendly labels
         factor_labels = {
             'const': r'$\alpha$',
-            'MKT': r'$\beta_{MKT}$',
-            'SMB': r'$\beta_{SMB}$',
-            'HML': r'$\beta_{HML}$',
-            'RMW': r'$\beta_{RMW}$',
-            'CMA': r'$\beta_{CMA}$',
-            'SIZE': r'$\beta_{SIZE}$',
-            'IA': r'$\beta_{IA}$',
-            'ROE': r'$\beta_{ROE}$'
+            'MKTRF_usd': r'$\beta_{MKT}$',
+            'SMB_usd': r'$\beta_{SMB}$',
+            'HML_usd': r'$\beta_{HML}$',
+            'RMW_A_usd': r'$\beta_{RMW}$',
+            'CMA_usd': r'$\beta_{CMA}$',
+            'ME_usd': r'$\beta_{SIZE}$',
+            'IA_usd': r'$\beta_{IA}$',
+            'ROE_usd': r'$\beta_{ROE}$'
         }
 
         # Table header
