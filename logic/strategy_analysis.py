@@ -8,7 +8,7 @@ import zipfile
 import statsmodels.api as sm 
 
 from abc import ABC, abstractmethod 
-from typing import Tuple, Any 
+from typing import Tuple, Any, Dict
 from logic.formatter import Formatter
 
 
@@ -18,10 +18,11 @@ NUM_OF_SLICES = 10
 class BaseAnalyzer(ABC):
     """Abstract analyzer for stock return predictors."""
 
-    def __init__(self, input_file: pd.DataFrame, crsp: pd.DataFrame | None = None, factors: pd.DataFrame | None = None) -> None:
+    def __init__(self, input_file: pd.DataFrame, crsp: pd.DataFrame | None = None, factors: pd.DataFrame | None = None, fm: pd.DataFrame | None = None) -> None:
         self.data = input_file
         self.crsp = crsp if crsp is not None else pd.read_csv("./data/dsws_crsp.csv")
         self.factors = factors if factors is not None else pd.read_csv("./data/Factors.csv")
+        self.fm = fm if fm is not None else pd.read_csv("./data/Fama_Macbeth.csv")
 
     @abstractmethod
     def analyze(self) -> Any:
@@ -78,6 +79,8 @@ class EqualWeightedFactorModelAnalyzer(BaseAnalyzer):
         fac = self.factors.copy()
         fac["month"] = pd.to_datetime(fac["DATE"]).dt.to_period("M").dt.to_timestamp("M")
         fac = fac.set_index("month").sort_index()
+        factor_cols = [c for c in fac.columns if c not in ["DATE"]]
+        fac[factor_cols] = fac[factor_cols] * 100
 
         model_specs = {
             "FF3": ["MKTRF_usd", "SMB_usd", "HML_usd"],
@@ -166,6 +169,8 @@ class ValueWeightedFactorModelAnalyzer(BaseAnalyzer):
         fac = self.factors.copy()
         fac["month"] = pd.to_datetime(fac["DATE"]).dt.to_period("M").dt.to_timestamp("M")
         fac = fac.set_index("month").sort_index()
+        factor_cols = [c for c in fac.columns if c not in ["DATE"]]
+        fac[factor_cols] = fac[factor_cols] * 100
 
         model_specs = {
             "FF3": ["MKTRF_usd", "SMB_usd", "HML_usd"],
@@ -200,166 +205,128 @@ class ValueWeightedFactorModelAnalyzer(BaseAnalyzer):
 
 
 class FamaMacBethAnalyzer(BaseAnalyzer):
-    def _fast_rolling_betas_per_slice(self, df_slice: pd.DataFrame, cols: list[str], window: int) -> pd.DataFrame:
-        """
-        Schnelles Rolling-OLS für Betas je Slice mit O(1)-Fenster-Updates.
-        Beta(t) verwendet Daten aus [t-window, ..., t-1] (kein Look-ahead).
-        """
-        # Nur vollständige Beobachtungen
-        df_slice = df_slice.sort_values("year_month").dropna(subset=["excess_ret"] + cols).reset_index(drop=True)
-        if df_slice.empty:
-            return pd.DataFrame(columns=["year_month"] + cols)
+    """
+    Fama–MacBeth (1973) Cross-Sectional Regressions
 
-        X = df_slice[cols].to_numpy(dtype=float)        # (T, K)
-        y = df_slice["excess_ret"].to_numpy(dtype=float) # (T,)
-        T, K = X.shape
-        if T < window or K == 0:
-            out = pd.DataFrame(columns=cols)
-            out["year_month"] = df_slice["year_month"].to_numpy()
-            return out
+    Spezifikation (monatlich, cross-sectional):
+        r_{i,t} = alpha_t + b1_t * ENSEMBLE_raw_{i,t} + b2_t * log(Size_{i,t}) + e_{i,t}
 
-        # Kumulative Summen
-        xnz = np.nan_to_num(X)
-        ynz = np.nan_to_num(y)
-        cs_xy = np.cumsum(xnz * ynz[:, None], axis=0)  # (T, K)
+    Ausgabe:
+        - mean_params: Zeitreihenmittel der Koeffizienten (alpha, ENSEMBLE_raw, logSize)
+        - tstats: klassische FM-t-Statistiken = mean / (std / sqrt(T))
+        - monthly_params: DataFrame mit den monatlichen Koeffizienten (für Diagnostics)
+        - meta: n_months, Periode
+    """
 
-        # Für X'X alle Paare (i,j)
-        XX = np.empty((T, K, K), dtype=float)
-        for i in range(K):
-            for j in range(i, K):
-                s = np.cumsum(xnz[:, i] * xnz[:, j])
-                XX[:, i, j] = s
-                if i != j:
-                    XX[:, j, i] = s
+    def _prep(self) -> pd.DataFrame:
+        # --- Input-Signal vorbereiten ---
+        # Kopie der Inputdaten (Ensemble CSV), Spaltennamen harmonisieren
+        sig = self.data.copy()
+        sig = sig.rename(columns={sig.columns[0]: "DSCD",      # eindeutiger Firmencode
+                                  sig.columns[1]: "dates",     # Datumsspalte
+                                  sig.columns[2]: "ENSEMBLE_raw"})  # Signal (Ensemble)
+        # Monat extrahieren (Periodenende)
+        sig["month"] = pd.to_datetime(sig["dates"]).dt.to_period("M").dt.to_timestamp("M")
 
-        betas = np.full((T, K), np.nan, dtype=float)
+        # --- CRSP-Daten vorbereiten ---
+        cr = self.crsp.copy()
+        cr["DATE"] = pd.to_datetime(cr["DATE"])
+        cr["month"] = cr["DATE"].dt.to_period("M").dt.to_timestamp("M")
 
-        # Beta für t nutzt Beobachtungen t-window .. t-1
-        for t in range(window, T):
-            lo, hi = t - window, t - 1
+        # Nur benötigte Variablen behalten: Rendite & Size (zeitgleich, nicht gelagged)
+        cr_small = cr[["DSCD", "month", "RET_USD", "SIZE"]].copy()
 
-            # Summen via cumsum-Differenz
-            s_xy = cs_xy[hi] - (cs_xy[lo - 1] if lo > 0 else 0.0)
-            s_xx = XX[hi]   - (XX[lo - 1]   if lo > 0 else 0.0)
+        # --- Merge von Signal & CRSP ---
+        # Inner Join auf (DSCD, month), damit pro Aktie und Monat Signal + Rendite + Size da sind
+        df = pd.merge(sig, cr_small, on=["DSCD", "month"], how="inner")
 
-            # Numerische Stabilität
-            try:
-                b = np.linalg.solve(s_xx, s_xy)
-            except np.linalg.LinAlgError:
-                b = np.linalg.lstsq(s_xx + 1e-8 * np.eye(K), s_xy, rcond=None)[0]
-            betas[t] = b
+        # --- Variablen bereinigen & berechnen ---
+        df["ret"] = pd.to_numeric(df["RET_USD"], errors="coerce")          # Zielvariable: Rendite
+        df["ensemble"] = pd.to_numeric(df["ENSEMBLE_raw"], errors="coerce") # Regressor 1: Ensemble
+        df["SIZE"] = pd.to_numeric(df["SIZE"], errors="coerce")             # Rohgröße für logSize
+        # log(Size), aber nur wenn Size > 0 (sonst NaN)
+        df["logSize"] = np.nan
+        mask = df["SIZE"] > 0
+        df.loc[mask, "logSize"] = np.log(df.loc[mask, "SIZE"])
 
-        out = pd.DataFrame(betas, columns=cols)
-        out["year_month"] = df_slice["year_month"].to_numpy()
-        return out
+        # Endgültiges DataFrame zurückgeben
+        return df[["DSCD", "month", "ret", "ensemble", "logSize"]]
 
-    def analyze(self, industry_code: int | None = None, country: str | None = None, window: int = 60) -> dict:
-        # ---------- Equal-Weighted Slices & Returns (wie bei dir) ----------
-        df_signal = self.prepare_signal_df(self.data)
-        df_signal['year_month'] = df_signal['date'].dt.to_period('M')
-        df_signal['slice'] = (
-            df_signal.groupby('year_month')['signal']
-                     .transform(lambda x: pd.qcut(x, NUM_OF_SLICES, labels=False, duplicates='drop') + 1)
+    @staticmethod
+    def _cs_ols(g: pd.DataFrame) -> pd.Series:
+        # --- Cross-Sectional OLS pro Monat ---
+        y = g["ret"]                               # abhängige Variable: Rendite r_{i,t}
+        X = g[["ensemble", "logSize"]]             # Regressoren: Ensemble + log(Size)
+        X = sm.add_constant(X, has_constant="add") # Konstante hinzufügen (alpha_t)
+
+        # Nur vollständige Beobachtungen behalten
+        mask = y.notna() & X.notna().all(axis=1)
+        y, X = y[mask], X[mask]
+
+        # Mindestbedingung: ≥3 Beobachtungen (2 Regressoren + 1 Konstante)
+        if len(y) < 3:
+            return pd.Series({"alpha": np.nan, "ENSEMBLE_raw": np.nan, "logSize": np.nan})
+
+        # OLS schätzen (Querschnitt für einen Monat)
+        res = sm.OLS(y, X).fit()
+
+        # Koeffizienten extrahieren und zurückgeben
+        return pd.Series({
+            "alpha": res.params.get("const", np.nan),      # Achsenabschnitt
+            "ENSEMBLE_raw": res.params.get("ensemble", np.nan),  # Effekt des Signals
+            "logSize": res.params.get("logSize", np.nan),  # Effekt der Firmengröße
+        })
+
+    @staticmethod
+    def _fm_tstat(series: pd.Series) -> float:
+        # --- Fama–MacBeth t-Statistik ---
+        # Klassisch: Mittelwert der Monats-Koeffizienten geteilt durch deren Std/sqrt(T)
+        s = series.dropna()
+        T = len(s)
+        if T == 0:
+            return np.nan
+        return float(s.mean() / (s.std(ddof=1) / np.sqrt(T)))
+
+    def analyze(self):
+        # --- Daten vorbereiten ---
+        df = self._prep()
+
+        # --- Schritt 1: Monatsweise Querschnittsregressionen ---
+        monthly_params = (
+            df.groupby("month")
+              .apply(self._cs_ols, include_groups=False)   # für jeden Monat: _cs_ols
+              .rename(columns={"ENSEMBLE_raw": "ensemble"})
         )
-        df_signal['ret_month'] = df_signal['year_month'] + 1  # t+1
+        # Spaltennamen harmonisieren
+        monthly_params = monthly_params.rename(columns={"ensemble": "ENSEMBLE_raw"})
 
-        df_crsp = self.crsp
-        if industry_code is not None and 'ff12' in df_crsp.columns:
-            df_crsp = df_crsp.loc[df_crsp['ff12'] == industry_code]
-        if country is not None and 'country' in df_crsp.columns:
-            df_crsp = df_crsp.loc[df_crsp['country'] == country]
+        # --- Schritt 2: Zeitreihen-Mittelwerte & FM-t-Statistiken ---
+        mean_params = monthly_params.mean(skipna=True).to_dict()  # Durchschnitt über Monate
+        tstats = {k: self._fm_tstat(monthly_params[k]) for k in monthly_params.columns} # t-Werte
 
-        df_crsp = df_crsp.rename(columns={'DSCD': 'permno', 'DATE': 'date'}).copy()
-        df_crsp['date'] = pd.to_datetime(df_crsp['date'])
-        df_crsp['year_month'] = df_crsp['date'].dt.to_period('M')
-        df_crsp['RET_USD'] = pd.to_numeric(df_crsp['RET_USD'], errors='coerce') / 100.0
-
-        # Map Slices t -> Returns t+1
-        ret_t1 = df_crsp[['permno', 'year_month', 'RET_USD']].rename(columns={'year_month': 'ret_month'})
-        merged = (df_signal[['permno', 'year_month', 'ret_month', 'slice']]
-                  .merge(ret_t1, on=['permno', 'ret_month'], how='inner'))
-
-        # Equal-weighted Portfolio-Returns je Monat x Slice
-        port_returns = (merged.groupby(['ret_month', 'slice'])['RET_USD']
-                        .mean()
-                        .reset_index()
-                        .rename(columns={'ret_month': 'year_month', 'RET_USD': 'port_ret'}))
-        port_returns['year_month'] = port_returns['year_month'].astype('period[M]')
-
-        # Faktoren + Excess
-        df_factors = self._prepare_factors()
-        model_data = pd.merge(port_returns, df_factors, on='year_month', how='inner')
-        model_data['excess_ret'] = model_data['port_ret'] - model_data['RF']
-
-        # ---------- First Pass: Rolling-Betas bis t-1 (schnell) ----------
-        specs = {
-            "FF3": ['MKT', 'SMB', 'HML'],
-            "FF5": ['MKT', 'SMB', 'HML', 'RMW', 'CMA'],
-            "Q":   ['MKT', 'SIZE', 'IA', 'ROE'],
+        # --- Schritt 3: Meta-Infos speichern ---
+        meta = {
+            "n_months": int(monthly_params.dropna(how="all").shape[0]),
+            "period_start": monthly_params.index.min(),
+            "period_end": monthly_params.index.max(),
         }
 
-        results = {}
-        months = sorted(model_data['year_month'].dropna().unique())
+        # --- Schritt 4: Ergebnisse ins Terminal drucken ---
+        print("\n=== Fama-MacBeth Regression Results ===")
+        print(f"Periode: {meta['period_start'].date()} bis {meta['period_end'].date()} "
+              f"({meta['n_months']} Monate)\n")
 
-        for mdl_name, cols in specs.items():
-            # Betas je Slice via Rolling (kein Look-ahead)
-            betas_all = []
-            for q in sorted(model_data['slice'].unique()):
-                sub = model_data.loc[model_data['slice'] == q, ['year_month', 'excess_ret'] + cols].copy()
-                betas_q = self._fast_rolling_betas_per_slice(sub, cols, window=window)
-                betas_q['slice'] = q
-                betas_all.append(betas_q)
+        header = f"{'Variable':<12} {'MeanCoeff':>12} {'t-Stat':>12}"
+        print(header)
+        print("-" * len(header))
+        for var in ["alpha", "ENSEMBLE_raw", "logSize"]:
+            mean_val = mean_params.get(var, np.nan)
+            t_val = tstats.get(var, np.nan)
+            print(f"{var:<12} {mean_val:12.4f} {t_val:12.2f}")
+        print("=" * len(header) + "\n")
 
-            betas_df = pd.concat(betas_all, ignore_index=True) if betas_all else pd.DataFrame()
-
-            # ---------- Second Pass: Cross-Section je Monat ----------
-            monthly_coefs = []
-            for t in months:
-                # Excess-Returns der Slices in Monat t
-                sub_t = model_data.loc[model_data['year_month'] == t, ['slice', 'excess_ret']].dropna()
-                if sub_t.empty:
-                    continue
-
-                # Betas(t) (die intern aus [t-window, t-1] geschätzt sind) mergen
-                bt = betas_df.loc[betas_df['year_month'] == t, ['slice'] + cols].dropna()
-                if bt.empty:
-                    continue
-                sub_t = sub_t.merge(bt, on='slice', how='inner')
-                if sub_t.shape[0] < len(cols) + 1:  # mind. K+1 Beobachtungen
-                    continue
-
-                x_cs = sm.add_constant(sub_t[cols], has_constant='add')
-                y_cs = sub_t['excess_ret']
-                try:
-                    res_cs = sm.OLS(y_cs, x_cs).fit()
-                except Exception:
-                    continue
-
-                monthly_coefs.append(res_cs.params)
-
-            if len(monthly_coefs) == 0:
-                idx = ['const'] + cols
-                results[mdl_name] = {
-                    "means": pd.Series(index=idx, dtype=float),
-                    "tstats": pd.Series(index=idx, dtype=float),
-                    "n_months": 0
-                }
-                continue
-
-            coef_df = pd.DataFrame(monthly_coefs)  # Zeilen sind Monate
-            tm = coef_df.shape[0]
-            means = coef_df.mean(axis=0)
-            stds  = coef_df.std(axis=0, ddof=1)
-            tstats = means / (stds / np.sqrt(tm))
-
-            results[mdl_name] = {
-                "means": means,
-                "tstats": tstats,
-                "n_months": int(tm)
-            }
-
-        return results
-
+        # --- Rückgabe: Ergebnisse + Diagnosedaten ---
+        return mean_params, tstats, monthly_params, meta
 
 
 def _inject_title_fallback(doc: str, title: str) -> str:
