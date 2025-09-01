@@ -1,5 +1,5 @@
-import numpy as np
 import pandas as pd
+import re
 import shutil
 import subprocess
 import tempfile
@@ -29,18 +29,18 @@ class Formatter:
         return output
     
     @staticmethod
-    def fama_macbeth_res_to_string(model_name: str, means: pd.Series, tstats: pd.Series, n_months: int) -> str:
-        lines = [f"Fama-MacBeth Results for {model_name} (T={n_months} months)"]
+    def fama_macbeth_res_to_string(means: pd.Series, tstats: pd.Series, n_months: int, signal_name: str) -> str:
+        lines = [f"\n======= Fama-MacBeth Results (T={n_months} months) =======\n"] 
         for coef in means.index:
-            coef_name = "Intercept" if coef == "const" else coef
+            coef_name = signal_name if coef == "Signal" else coef
             lines.append(f"{coef_name:10s}: {means[coef]:.4f}  (t={tstats[coef]:.2f})")
         return "\n".join(lines)
     
     @staticmethod
-    def generate_fama_macbeth_two_pass_latex_table(model_name, means, tstats, n_months):
+    def generate_fama_macbeth_latex_table(means: pd.Series, tstats: pd.Series, signal_name: str):
         rows = []
         for coef in means.index:
-            coef_name = "Intercept" if coef == "const" else coef
+            coef_name = Formatter._latex_escape(signal_name) if coef == "Signal" else coef
             rows.append(
                 f"{coef_name} & {means[coef]:.4f} & {tstats[coef]:.2f} \\\\"
             )
@@ -55,7 +55,7 @@ class Formatter:
             body + "\n" +
             "\\bottomrule\n"
             "\\end{tabular}\n"
-            "\\caption{Fama-MacBeth Results for " + model_name + "}\n"
+            "\\caption{Fama-MacBeth Results for}\n"
             "\\end{table}\n"
         )
                 
@@ -197,27 +197,6 @@ class Formatter:
         return table
     
     @staticmethod
-    def generate_fama_macbeth_latex_table(beta_mean, beta_std, t_stat, n) -> str:
-        table = (
-            r"\begin{table}[htbp]" + "\n"
-            r"\centering" + "\n"
-            r"\begin{tabular}{lr}" + "\n"
-            r"\toprule" + "\n"
-            r"Ratio & Value \\" + "\n"
-            r"\midrule" + "\n"
-            rf"Mean Beta & {beta_mean:.4f} \\" + "\n"
-            rf"Standard Deviation & {beta_std:.4f} \\" + "\n"
-            rf"T-Statistic & {t_stat:.4f} \\" + "\n"
-            rf"N (Months) & {n} \\" + "\n"
-            r"\bottomrule" + "\n"
-            r"\end{tabular}" + "\n"
-            r"\caption{Fama-MacBeth Regression Result}" + "\n"
-            r"\end{table}"
-        )
-
-        return table
-    
-    @staticmethod
     def create_complete_latex_document(
         ff3_equal_tex: str, 
         ff5_equal_tex: str, 
@@ -334,3 +313,33 @@ class Formatter:
             shutil.move(str(generated_pdf), str(output_path))
 
         return str(output_path)
+    
+    @staticmethod
+    def _inject_title_fallback(doc: str, title: str) -> str:
+        # If Formatter can't take a doc_title kwarg, inject it into the LaTeX string.
+        # 1) Replace existing \title{...} if present; else
+        # 2) Insert \title{...}\maketitle before \begin{document}.
+        if r'\title{' in doc:
+            return re.sub(r'\\title\{.*?\}', f'\\title{{{title}}}', doc, count=1, flags=re.S)
+        return doc.replace(r'\begin{document}', f'\\title{{{title}}}\n\\maketitle\n\\begin{document}', 1)
+
+    @staticmethod
+    def _latex_escape(s: str) -> str:
+        """
+        Escape LaTeX special chars in strings for safe use inside LaTeX documents.
+        """
+        replacements = {
+            "\\": r"\textbackslash{}",
+            "_": r"\_",
+            "&": r"\&",
+            "%": r"\%",
+            "$": r"\$",
+            "#": r"\#",
+            "{": r"\{",
+            "}": r"\}",
+            "~": r"\textasciitilde{}",
+            "^": r"\textasciicircum{}",
+        }
+        for char, repl in replacements.items():
+            s = s.replace(char, repl)
+        return s
