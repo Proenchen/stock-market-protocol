@@ -253,8 +253,7 @@ class FamaMacBethAnalyzer(BaseAnalyzer):
                   + e_{i,t}
 
     Skalierung:
-        Alle Regressoren (nicht die Zielvariable r_{i,t}) werden
-        pro Monat auf das Intervall [-1, 1] skaliert.
+        Alle Variablen werden pro Monat auf das Intervall [-1, 1] skaliert.
     """
     def _prep(self, industry_code: int | None = None, country: str | None = None) -> pd.DataFrame:
         sig = self.data.copy()
@@ -301,19 +300,22 @@ class FamaMacBethAnalyzer(BaseAnalyzer):
         df["ag"] = pd.to_numeric(df["ag"], errors="coerce")
         df["rd_sale"] = pd.to_numeric(df["rd_sale"], errors="coerce")
 
-        # Skalierung aller Regressoren auf [-1, 1] pro Monat
+        # Skalierung aller Variablen auf [-1, 1] pro Monat
         regressors = ["signal", "size_lag", "mom_2_12", "bm", "ag", "rd_sale"]
+
         def scale_monthly(s: pd.Series):
-            m = s.mean()
-            sd = s.std(ddof=0)  
-            if pd.notna(sd) and sd != 0:
-                return (s - m) / sd
-            return pd.Series(np.nan, index=s.index)
-        
+            r = s.rank(method="average")
+            n = r.size
+            if n <= 1:
+                return pd.Series(np.nan, index=s.index)
+            u = (r - 1) / (n - 1)
+            return 2.0 * u - 1.0
+
         for col in regressors:
             df[col] = df.groupby("month")[col].transform(scale_monthly)
 
         return df[["DSCD", "month", "ret"] + regressors]
+    
 
     @staticmethod
     def _cs_ols(g: pd.DataFrame) -> pd.Series:

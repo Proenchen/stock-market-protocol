@@ -55,7 +55,7 @@ class Formatter:
             body + "\n" +
             "\\bottomrule\n"
             "\\end{tabular}\n"
-            "\\caption{Fama-MacBeth Results for}\n"
+            "\\caption{Fama-MacBeth Results}\n"
             "\\end{table}\n"
         )
                 
