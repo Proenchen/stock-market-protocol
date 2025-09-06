@@ -58,7 +58,103 @@ class Formatter:
             "\\caption{Fama-MacBeth Results}\n"
             "\\end{table}\n"
         )
-                
+
+    @staticmethod
+    def alpha_table_to_latex(df: pd.DataFrame, group_name: str, caption: str) -> str:
+        """
+        df: Zeilen = Gruppen/Schemata, Spalten = ['FF3','FF5','Q'], Zellen: 'alpha (t)'
+        """
+        cols = ["FF3","FF5","Q"]
+        cols = [c for c in cols if c in df.columns]
+        body = "\n".join(
+            f"{Formatter._latex_escape(str(idx))} & " +
+            " & ".join(df.loc[idx, c] if isinstance(df.loc[idx, c], str) else "" for c in cols) +
+            r" \\[12pt]"
+            for idx in df.index
+        )
+        header = group_name + " & " + " & ".join(cols) + r" \\ \midrule"
+        table_out = (
+            "\\begin{table}[H]\n\\centering\n"
+            "\\begin{tabular}{l" + "c"*len(cols) + "}\n\\toprule\n" +
+            header + "\n" + body + "\n\\bottomrule\n\\end{tabular}\n" +
+            f"\\caption{{{Formatter._latex_escape(caption)}}}\n\\end" + "{table}\n"
+        )
+        return table_out 
+    
+    @staticmethod
+    def alpha_table_to_latex_four_quarters_two_pages(df: pd.DataFrame, group_name: str, caption: str) -> str:
+        # Spaltenauswahl
+        cols = [c for c in ["FF3", "FF5", "Q"] if c in df.columns]
+
+        # In 4 möglichst gleich große Teile splitten
+        n = len(df)
+        q, r = divmod(n, 4)
+        sizes = [(q + 1 if i < r else q) for i in range(4)]
+        parts = []
+        start = 0
+        for s in sizes:
+            parts.append(df.iloc[start:start+s])
+            start += s
+
+        # Für jedes Teilstück ein Tabular in einer Minipage bauen (ohne Hilfsfunktionen)
+        tabulars = []
+        for part in parts:
+            # Body-Zeilen
+            rows = []
+            for idx in part.index:
+                row_cells = [Formatter._latex_escape(str(idx))]
+                for c in cols:
+                    v = part.loc[idx, c]
+                    row_cells.append(v if isinstance(v, str) else "")
+                rows.append(" & ".join(row_cells) + r" \\[12pt]")
+            body = "\n".join(rows)
+
+            # Header + vollständiges tabular
+            header = f"{group_name} & " + " & ".join(cols) + r" \\ \midrule"
+            tabular = (
+                "\\begin{minipage}{0.48\\linewidth}\n" +
+                "\\centering\n" +
+                "\\begin{tabular}{l" + "c"*len(cols) + "}\n" +
+                "\\toprule\n" +
+                header + "\n" +
+                body + ("\n" if body else "") +  # falls leer, keine Extrazeile
+                "\\bottomrule\n" +
+                "\\end{tabular}\n" +
+                "\\end{minipage}\n"
+                )
+            tabulars.append(tabular)
+
+        # Sicherstellen, dass wir 4 Elemente haben (können leer sein)
+        while len(tabulars) < 4:
+            tabulars.append(
+                "\\begin{minipage}{0.48\\linewidth}\n\\centering\n" +
+                "\\begin{tabular}{l" + "c"*len(cols) + "}\n\\toprule\n" +
+                (f"{group_name} & " + " & ".join(cols) + r" \\ \midrule\n" if cols else "") +
+                "\\bottomrule\n\\end{tabular}\n\\end{minipage}\n"
+            )
+
+        # Seite 1: links Q1, rechts Q2
+        page1 = (
+            "\\begin{table}[H]\n\\centering\n"
+            + tabulars[0]
+            + "\\hfill\n"
+            + tabulars[1]
+            + "\\end{table}\n"
+        )
+
+        # Seite 2: links Q3, rechts Q4
+        page2 = (
+            "\\begin{table}[H]\n\\centering\n"
+            + tabulars[2]
+            + "\\hfill\n"
+            + tabulars[3]
+            + f"\\caption{{{Formatter._latex_escape(caption)}}}\n"
+            + "\\end{table}\n"
+        )
+
+        # Seitenumbruch dazwischen
+        return page1 + "\\newpage\n" + page2
+                    
     @staticmethod
     def generate_latex_table(results_dict: dict, model_name: str) -> str:
         """
@@ -207,6 +303,10 @@ class Formatter:
         q_value_tex: str, 
         long_short_value_tex: str,
         fama_macbeth_tex: str,
+        industry_tex: str,
+        industry_aggregated_tex: str,
+        country_tex: str,
+        country_aggregated_tex: str,
         title: str = "Global Stock Market Protocol Analysis Results"
     ) -> str:
         """
@@ -238,7 +338,7 @@ class Formatter:
 \maketitle
 
 """ + r"""
-\section{Fama-French Analysis with Equal Weighting}
+\section{Factor Model Analysis with Equal Weighting}
 \subsection{Fama-French 3-Factor Model}
 """ + "\n" + ff3_equal_tex + "\n\n" + r"""
 \pagebreak
@@ -251,7 +351,7 @@ class Formatter:
 \subsection{Long-Short Analysis}
 """ + "\n" + long_short_equal_tex + "\n" + r"""
 \pagebreak
-\section{Fama-French Analysis with Value Weighting}
+\section{Factor Model Analysis with Value Weighting}
 \subsection{Fama-French 3-Factor Model}
 """ + "\n" + ff3_value_tex + "\n\n" + r"""
 \pagebreak
@@ -266,6 +366,16 @@ class Formatter:
 
 \section{Fama-MacBeth Regression Result}
 """ + "\n" + fama_macbeth_tex + "\n" + r"""
+
+\section{Factor Model Analysis by Industries}
+""" + "\n" + industry_tex + "\n" + r"""
+""" + "\n" + industry_aggregated_tex + "\n" + r"""
+
+\section{Factor Model Analysis by Countries}
+""" + "\n" + country_tex + "\n" + r"""
+\pagebreak
+""" + "\n" + country_aggregated_tex + "\n" + r"""
+
 \end{document}
         """
 

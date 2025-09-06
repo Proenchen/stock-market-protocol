@@ -13,7 +13,7 @@ from logic.formatter import Formatter
 
 
 NUM_OF_SLICES = 10
-
+GROUP_NUM_SLICES = 5  # für Industrie-/Länder-Tabellen
 
 class BaseAnalyzer(ABC):
     """Abstract analyzer for stock return predictors."""
@@ -380,6 +380,221 @@ class FamaMacBethAnalyzer(BaseAnalyzer):
 
         return mean_params, tstats, n_months
 
+
+class _VWLongShortTables:
+    """
+    Hilfsfunktionen für value-weighted Long-Short Alpha-Tabellen.
+    Nutzt dieselbe Faktorskalierung und Regressionsroutine wie deine Analyzer.
+    """
+
+    MODEL_SPECS = {
+        "FF3": ["MKTRF_usd", "SMB_usd", "HML_usd"],
+        "FF5": ["MKTRF_usd", "SMB_usd", "HML_usd", "RMW_A_usd", "CMA_usd"],
+        "Q"  : ["MKTRF_usd", "ME_usd", "IA_usd", "ROE_usd"],
+    }
+
+    @staticmethod
+    def _fit_alpha(y: pd.Series, X: pd.DataFrame):
+        Xc = sm.add_constant(X)
+        m = y.notna() & Xc.notna().all(axis=1)
+        y2, X2 = y[m], Xc[m]
+        if len(y2)==0 or X2.shape[0] <= X2.shape[1]:
+            return np.nan, np.nan
+        res = sm.OLS(y2, X2).fit()
+        a = res.params.get("const", np.nan)
+        t = res.tvalues.get("const", np.nan)
+        return float(a), float(t)
+
+    @staticmethod
+    def _prepare_signal_crsp(signal_df: pd.DataFrame, crsp_full: pd.DataFrame) -> pd.DataFrame:
+        df = signal_df.copy()
+        df = df.rename(columns={df.columns[0]:"DSCD", df.columns[1]:"dates", df.columns[2]:"signal"})
+        df["month"] = pd.to_datetime(df["dates"]).dt.to_period("M").dt.to_timestamp("M")
+
+        cr = crsp_full.copy()
+        cr["DATE"] = pd.to_datetime(cr["DATE"])
+        cr["month"] = cr["DATE"].dt.to_period("M").dt.to_timestamp("M")
+        keep = ["DSCD","month","RET_USD","size_lag","ff12","country"]
+        cr = cr[keep]
+        return pd.merge(df, cr, on=["DSCD","month"], how="inner")
+
+    @staticmethod
+    def _assign_deciles_within_groups(df: pd.DataFrame, by_cols: list[str]) -> pd.DataFrame:
+        def _safe_quantil_labels(s: pd.Series, q: int) -> pd.Series:
+            # 1) Direkte Quantil-Schnitte ohne feste Labels → Pandas vergibt 0..k-1
+            try:
+                cat = pd.qcut(s, q, labels=False, duplicates="drop")
+            except Exception:
+                # 2) Fallback: Rank → gleichverteiltes Raster
+                r = s.rank(method="first")
+                if r.nunique() < 2:
+                    return pd.Series([np.nan] * len(s), index=s.index)
+                try:
+                    cat = pd.qcut(r, min(q, int(r.nunique())), labels=False, duplicates="drop")
+                except Exception:
+                    return pd.Series([np.nan] * len(s), index=s.index)
+            # nach 1..k mappen
+            return (cat.astype("float") + 1).astype("Int64")
+
+        def _assign(g: pd.DataFrame) -> pd.DataFrame:
+            g = g.copy()
+            g["decile"] = _safe_quantil_labels(g["signal"], GROUP_NUM_SLICES)
+            return g
+
+        return df.groupby(by_cols, group_keys=False).apply(_assign)
+
+    @staticmethod
+    def _vwret(g: pd.DataFrame) -> float:
+        w = pd.to_numeric(g["size_lag"], errors="coerce").clip(lower=0)
+        r = pd.to_numeric(g["RET_USD"], errors="coerce")
+        m = r.notna() & w.notna() & (w>0)
+        if not m.any():
+            return np.nan
+        return float(np.average(r[m], weights=w[m]))
+
+    @staticmethod
+    def _build_group_decile_returns(df: pd.DataFrame, group_col: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+        # value-weighted Decile-Returns je (month, group, decile)
+        by = ["month", group_col, "decile"]
+        ret = (df.groupby(by).apply(_VWLongShortTables._vwret)
+                 .rename("vwret").reset_index())
+        # zu wide per Gruppe
+        wide = ret.pivot_table(index=["month",group_col], columns="decile", values="vwret")
+        # Group Market Cap je Monat (für Aggregation)
+        mcap = df.groupby(["month", group_col])["size_lag"].sum().rename("mcap")
+        mcap = mcap.reset_index()
+        return wide, mcap
+
+    @staticmethod
+    def _aggregate_over_groups(wide: pd.DataFrame, mcap: pd.DataFrame,
+                               scheme: str) -> pd.DataFrame:
+        """
+        scheme: 'mcap' (Marktcap-Gewicht) oder 'equal' (1/n über Gruppen)
+        returns: decile returns je month (über alle Gruppen aggregiert)
+        """
+        # bring mcap in wide-index
+        wide2 = wide.copy()
+        wide2 = wide2.reset_index()  # month, group_col, decile cols
+        df = wide2.merge(mcap, on=list(wide2.columns[:2]), how="left")
+        # Gewicht je month, group
+        if scheme == "mcap":
+            df["agg_w"] = df["mcap"].clip(lower=0)
+        elif scheme == "equal":
+            df["agg_w"] = 1.0
+        else:
+            raise ValueError("scheme must be 'mcap' or 'equal'.")
+
+        # normiere Gewichte je Monat
+        def _wavg(g: pd.DataFrame) -> pd.Series:
+            w = g["agg_w"].fillna(0.0).values
+            out = {}
+            for d in range(1, GROUP_NUM_SLICES+1):
+                col = d
+                v = g[col].astype(float)
+                m = v.notna() & np.isfinite(w)
+                if m.any():
+                    out[d] = float(np.average(v[m], weights=w[m]))
+                else:
+                    out[d] = np.nan
+            return pd.Series(out)
+
+        agg = df.groupby("month").apply(_wavg).sort_index()
+        return agg  
+
+    @staticmethod
+    def long_short_alphas_by_group(signal_df: pd.DataFrame,
+                                   crsp_full: pd.DataFrame,
+                                   factors_full: pd.DataFrame,
+                                   group_col: str) -> pd.DataFrame:
+        """
+        Liefert eine Tabelle (Zeilen=Gruppe, Spalten=FF3/FF5/Q) mit 'alpha (t)' Strings.
+        Innerhalb jeder Gruppe werden value-weighted Decile gebildet; LS=10-1; Regression auf Faktoren.
+        """
+        df = _VWLongShortTables._prepare_signal_crsp(signal_df, crsp_full)
+        # Deciles innerhalb (month, group)
+        df = _VWLongShortTables._assign_deciles_within_groups(df, ["month", group_col])
+
+        # LS pro Gruppe
+        grp_cols = ["month", group_col, "decile"]
+        ret = (df.groupby(grp_cols).apply(_VWLongShortTables._vwret)
+                 .rename("vwret").reset_index())
+        wide = ret.pivot_table(index=["month", group_col], columns="decile", values="vwret").sort_index()
+        ls = wide[GROUP_NUM_SLICES] - wide[1]      # Series mit Multiindex (month, group)
+
+        # Faktoren (wie im Rest: *100 und rf_ff ziehen)
+        fac = factors_full.copy()
+        fac["month"] = pd.to_datetime(fac["DATE"]).dt.to_period("M").dt.to_timestamp("M")
+        fac = fac.set_index("month").sort_index()
+        fac[[c for c in fac.columns if c!="DATE"]] = fac[[c for c in fac.columns if c!="DATE"]] * 100
+
+        rows = []
+        for grp, s in ls.groupby(level=1):  # für jede Gruppe Zeitreihe
+            ts = s.droplevel(1)
+            if ts.size < 8:   # zu wenige Monate für stabile Regression → skip
+                continue
+            df_ts = pd.DataFrame({"LS": ts}).join(fac, how="inner")
+            y = df_ts["LS"] - df_ts["rf_ff"]  # Excess
+            row = {"group": grp}
+            for name, cols in _VWLongShortTables.MODEL_SPECS.items():
+                a, t = _VWLongShortTables._fit_alpha(y, df_ts[cols])
+                row[name] = (
+                    r"\begin{tabular}{@{}c@{}}" 
+                    + f"{a:.2f}" 
+                    + r"\\\relax [" 
+                    + f"{t:.2f}" 
+                    + r"]\end{tabular}"
+                    if np.isfinite(a) and np.isfinite(t) else ""
+                )
+            rows.append(row)
+
+        out = pd.DataFrame(rows).sort_values("group").set_index("group")
+        return out
+
+    @staticmethod
+    def long_short_alphas_neutral_aggregations(signal_df: pd.DataFrame,
+                                               crsp_full: pd.DataFrame,
+                                               factors_full: pd.DataFrame,
+                                               group_col: str) -> pd.DataFrame:
+        """
+        Baut die 'neutralen' Aggregationen:
+          - erst Deciles value-weighted *innerhalb* jeder Gruppe,
+          - dann Aggregation über Gruppen: 'mcap' und 'equal',
+          - anschließend LS-Alpha (FF3/FF5/Q) je Aggregationsschema.
+        Ergebnis: Zeilen = ['MarketCap-Weighted', 'Equal-Weighted'].
+        """
+        df = _VWLongShortTables._prepare_signal_crsp(signal_df, crsp_full)
+        df = _VWLongShortTables._assign_deciles_within_groups(df, ["month", group_col])
+
+        wide, mcap = _VWLongShortTables._build_group_decile_returns(df, group_col)
+
+        fac = factors_full.copy()
+        fac["month"] = pd.to_datetime(fac["DATE"]).dt.to_period("M").dt.to_timestamp("M")
+        fac = fac.set_index("month").sort_index()
+        fac[[c for c in fac.columns if c!="DATE"]] = fac[[c for c in fac.columns if c!="DATE"]] * 100
+
+        rows = []
+        for scheme_name, scheme in [("MarketCap-Weighted", "mcap"), ("Equal-Weighted", "equal")]:
+            dec = _VWLongShortTables._aggregate_over_groups(wide, mcap, scheme)
+            ls = dec[GROUP_NUM_SLICES] - dec[1]
+            df_ts = pd.DataFrame({"LS": ls}).join(fac, how="inner")
+            y = df_ts["LS"] - df_ts["rf_ff"]
+
+            row = {"scheme": scheme_name}
+            for name, cols in _VWLongShortTables.MODEL_SPECS.items():
+                a, t = _VWLongShortTables._fit_alpha(y, df_ts[cols])
+                row[name] = (
+                    r"\begin{tabular}{@{}c@{}}" 
+                    + f"{a:.2f}" 
+                    + r"\\\relax [" 
+                    + f"{t:.2f}" 
+                    + r"]\end{tabular}"
+                    if np.isfinite(a) and np.isfinite(t) else ""
+                )
+            rows.append(row)
+
+        return pd.DataFrame(rows).set_index("scheme")
+
+
 def run_analysis(df: pd.DataFrame, signal_name: str):
     # Load once & share
     crsp_full = pd.read_csv("./data/dsws_crsp.csv")
@@ -411,6 +626,52 @@ def run_analysis(df: pd.DataFrame, signal_name: str):
     fmb_result_means, fmb_result_t_stats, n_months = fama_macbeth_analyzer.analyze()
     fmb_res_string = Formatter.fama_macbeth_res_to_string(fmb_result_means, fmb_result_t_stats, n_months, signal_name)
     latex_fmb_res = Formatter.generate_fama_macbeth_latex_table(fmb_result_means, fmb_result_t_stats, signal_name)
+    print(22)
+
+    alpha_by_industry = _VWLongShortTables.long_short_alphas_by_group(
+        df, crsp_full, factors_full, group_col="ff12"
+    )
+    latex_alpha_by_industry = Formatter.alpha_table_to_latex(
+        alpha_by_industry, "Industry", "Intercept estimates from times-series regressions of long-short portfolios for each industry using different factor models. " \
+        "Each cell displays the monthly intercept with t-statistics in brackets. " \
+        "The portfolios are constructed using value weighting for each industry."
+    )
+
+    alpha_industry_neutral = _VWLongShortTables.long_short_alphas_neutral_aggregations(
+        df, crsp_full, factors_full, group_col="ff12"
+    )
+    latex_alpha_industry_neutral = Formatter.alpha_table_to_latex(
+        alpha_industry_neutral, "", "Intercept values for the aggregated industry portfolios based on the market cap and equal weighting."
+    )
+
+
+    alpha_by_country = _VWLongShortTables.long_short_alphas_by_group(
+        df, crsp_full, factors_full, group_col="country"
+    )
+    
+    MAX_ROWS_SINGLE = 20
+    country_caption = (
+        "Intercept estimates from times-series regressions of long-short portfolios for each country using different factor models. " \
+        "Each cell displays the monthly intercept with t-statistics in brackets. " \
+        "The portfolios are constructed using value weighting for each country."
+    )
+
+    if len(alpha_by_country) > MAX_ROWS_SINGLE:
+        latex_alpha_by_country = Formatter.alpha_table_to_latex_four_quarters_two_pages(
+            alpha_by_country, "Country", country_caption
+        )
+    else:
+        latex_alpha_by_country = Formatter.alpha_table_to_latex(
+            alpha_by_country, "Country", country_caption
+        )
+
+    alpha_country_neutral = _VWLongShortTables.long_short_alphas_neutral_aggregations(
+        df, crsp_full, factors_full, group_col="country"
+    )
+    latex_alpha_country_neutral = Formatter.alpha_table_to_latex(
+        alpha_country_neutral, "", "Intercept values for the aggregated country portfolios based on the market cap and equal weighting."
+    )
+
 
     print(3)
     escaped_signal = Formatter._latex_escape(signal_name)
@@ -421,14 +682,16 @@ def run_analysis(df: pd.DataFrame, signal_name: str):
         latex_output = Formatter.create_complete_latex_document(
             latex_ff3_equal, latex_ff5_equal, latex_q_equal, latex_long_short_equal,
             latex_ff3_value, latex_ff5_value, latex_q_value, latex_long_short_value,
-            latex_fmb_res,
+            latex_fmb_res, latex_alpha_by_industry, latex_alpha_industry_neutral,
+            latex_alpha_by_country, latex_alpha_country_neutral,
             title=baseline_title,         
         )
     except TypeError:
         latex_output = Formatter.create_complete_latex_document(
             latex_ff3_equal, latex_ff5_equal, latex_q_equal, latex_long_short_equal,
             latex_ff3_value, latex_ff5_value, latex_q_value, latex_long_short_value,
-            latex_fmb_res
+            latex_fmb_res, latex_alpha_by_industry, latex_alpha_industry_neutral,
+            latex_alpha_by_country, latex_alpha_country_neutral,
         )
         latex_output = Formatter._inject_title_fallback(latex_output, baseline_title)
 
@@ -443,169 +706,19 @@ def run_analysis(df: pd.DataFrame, signal_name: str):
     zip_filename = f"{safe_signal_name}.zip"
     zip_path = os.path.join(result_dir, zip_filename)
 
-    # Collect outputs (now under baseline/)
     results = {
-        "baseline/ff3_equal.txt": ff3_equal,
-        "baseline/ff5_equal.txt": ff5_equal,
-        "baseline/q_equal.txt": q_equal,
-        "baseline/long_short_equal.txt": long_short_equal,
-        "baseline/ff3_value.txt": ff3_value,
-        "baseline/ff5_value.txt": ff5_value,
-        "baseline/q_value.txt": q_value,
-        "baseline/long_short_value.txt": long_short_value,
-        "baseline/fama_macbeth.txt": fmb_res_string,
-        "baseline/output.tex": latex_output,
+        "ff3_equal.txt": ff3_equal,
+        "ff5_equal.txt": ff5_equal,
+        "q_equal.txt": q_equal,
+        "long_short_equal.txt": long_short_equal,
+        "ff3_value.txt": ff3_value,
+        "ff5_value.txt": ff5_value,
+        "q_value.txt": q_value,
+        "long_short_value.txt": long_short_value,
+        "fama_macbeth.txt": fmb_res_string,
+        "output.tex": latex_output,
     }
     print(5)
-    # ---------- Per-industry runs ----------
-    industry_codes = sorted(pd.unique(crsp_full['ff12'].dropna().astype(int)))
-    for code in industry_codes:
-        code_int = int(code)
-        print(code_int)
-
-        # EW / VW
-        res_eq_ind, ls_eq_ind = equal_factor_model_analyzer.analyze(industry_code=code_int)
-        res_vw_ind, ls_vw_ind = value_factor_model_analyzer.analyze(industry_code=code_int)
-        fmb_means_i, fmb_tstats_i, fmb_n_i = fama_macbeth_analyzer.analyze(industry_code=code_int)
-
-        # --- Defensive Skip: keine Daten ---
-        if (all(len(v) == 0 for v in res_eq_ind.values()) or
-            all(len(v) == 0 for v in res_vw_ind.values()) or
-            (fmb_means_i.isna().all() or fmb_n_i == 0)):
-            print(f"skip industry {code_int} (no data)")
-            continue
-
-        # Falls Daten da → Formatter benutzen
-        ff3_eq_i, ff5_eq_i, q_eq_i = Formatter.results_to_strings(res_eq_ind)
-        ls_eq_i_txt = Formatter.long_short_res_to_string(ls_eq_ind)
-
-        ff3_vw_i, ff5_vw_i, q_vw_i = Formatter.results_to_strings(res_vw_ind)
-        ls_vw_i_txt = Formatter.long_short_res_to_string(ls_vw_ind)
-
-        fm_i_text   = Formatter.fama_macbeth_res_to_string(fmb_means_i, fmb_tstats_i, fmb_n_i, signal_name)
-        latex_fmb_i = Formatter.generate_fama_macbeth_latex_table(fmb_means_i, fmb_tstats_i, signal_name)
-
-        # LaTeX Dokument pro Industry
-        industry_title = f"Global Stock Market Protocol Analysis Results for {escaped_signal} - Industry {code_int} (FF12)"
-        try:
-            latex_output_i = Formatter.create_complete_latex_document(
-                Formatter.generate_latex_table(res_eq_ind, "FF3"),
-                Formatter.generate_latex_table(res_eq_ind, "FF5"),
-                Formatter.generate_latex_table(res_eq_ind, "Q"),
-                Formatter.generate_long_short_latex_table(ls_eq_ind),
-
-                Formatter.generate_latex_table(res_vw_ind, "FF3"),
-                Formatter.generate_latex_table(res_vw_ind, "FF5"),
-                Formatter.generate_latex_table(res_vw_ind, "Q"),
-                Formatter.generate_long_short_latex_table(ls_vw_ind),
-
-                latex_fmb_i,
-                title=industry_title
-            )
-        except TypeError:
-            latex_output_i = Formatter.create_complete_latex_document(
-                Formatter.generate_latex_table(res_eq_ind, "FF3"),
-                Formatter.generate_latex_table(res_eq_ind, "FF5"),
-                Formatter.generate_latex_table(res_eq_ind, "Q"),
-                Formatter.generate_long_short_latex_table(ls_eq_ind),
-
-                Formatter.generate_latex_table(res_vw_ind, "FF3"),
-                Formatter.generate_latex_table(res_vw_ind, "FF5"),
-                Formatter.generate_latex_table(res_vw_ind, "Q"),
-                Formatter.generate_long_short_latex_table(ls_vw_ind),
-
-                latex_fmb_i
-            )
-            latex_output_i = Formatter._inject_title_fallback(latex_output_i, industry_title)
-
-        prefix = f"industries/industry_ff12_{code_int}"
-        results.update({
-            f"{prefix}/ff3_equal.txt": ff3_eq_i,
-            f"{prefix}/ff5_equal.txt": ff5_eq_i,
-            f"{prefix}/q_equal.txt":   q_eq_i,
-            f"{prefix}/long_short_equal.txt": ls_eq_i_txt,
-            f"{prefix}/ff3_value.txt": ff3_vw_i,
-            f"{prefix}/ff5_value.txt": ff5_vw_i,
-            f"{prefix}/q_value.txt":   q_vw_i,
-            f"{prefix}/long_short_value.txt": ls_vw_i_txt,
-            f"{prefix}/fama_macbeth.txt": fm_i_text,
-            f"{prefix}/output.tex": latex_output_i,
-        })
-
-    # ---------- Per-country runs ----------
-    countries = sorted(pd.unique(crsp_full['country'].dropna().astype(str)))
-    for ctry in countries:
-        print(ctry)
-        try:
-            res_eq_cty, ls_eq_cty = equal_factor_model_analyzer.analyze(country=ctry)
-            res_vw_cty, ls_vw_cty = value_factor_model_analyzer.analyze(country=ctry)
-            fmb_means_c, fmb_tstats_c, fmb_n_c = fama_macbeth_analyzer.analyze(country=ctry)
-
-            if (all(len(v) == 0 for v in res_eq_cty.values()) or
-                all(len(v) == 0 for v in res_vw_cty.values()) or
-                (fmb_means_c.isna().all() or fmb_n_c == 0)):
-                print(f"skip country {ctry} (no data)")
-                continue
-
-            ff3_eq_c, ff5_eq_c, q_eq_c = Formatter.results_to_strings(res_eq_cty)
-            ls_eq_c_txt = Formatter.long_short_res_to_string(ls_eq_cty)
-
-            ff3_vw_c, ff5_vw_c, q_vw_c = Formatter.results_to_strings(res_vw_cty)
-            ls_vw_c_txt = Formatter.long_short_res_to_string(ls_vw_cty)
-
-            fm_c_text   = Formatter.fama_macbeth_res_to_string(fmb_means_c, fmb_tstats_c, fmb_n_c, signal_name)
-            latex_fmb_c = Formatter.generate_fama_macbeth_latex_table(fmb_means_c, fmb_tstats_c, signal_name)
-        
-        except ValueError:
-            continue
-
-        safe_country = re.sub(r'[^A-Za-z0-9_-]+', '_', str(ctry))
-        country_title = f"Global Stock Market Protocol Analysis Results for {escaped_signal} - Country {ctry}"
-
-        try:
-            latex_output_c = Formatter.create_complete_latex_document(
-                Formatter.generate_latex_table(res_eq_cty, "FF3"),
-                Formatter.generate_latex_table(res_eq_cty, "FF5"),
-                Formatter.generate_latex_table(res_eq_cty, "Q"),
-                Formatter.generate_long_short_latex_table(ls_eq_cty),
-
-                Formatter.generate_latex_table(res_vw_cty, "FF3"),
-                Formatter.generate_latex_table(res_vw_cty, "FF5"),
-                Formatter.generate_latex_table(res_vw_cty, "Q"),
-                Formatter.generate_long_short_latex_table(ls_vw_cty),
-
-                latex_fmb_c,
-                title=country_title
-            )
-        except TypeError:
-            latex_output_c = Formatter.create_complete_latex_document(
-                Formatter.generate_latex_table(res_eq_cty, "FF3"),
-                Formatter.generate_latex_table(res_eq_cty, "FF5"),
-                Formatter.generate_latex_table(res_eq_cty, "Q"),
-                Formatter.generate_long_short_latex_table(ls_eq_cty),
-
-                Formatter.generate_latex_table(res_vw_cty, "FF3"),
-                Formatter.generate_latex_table(res_vw_cty, "FF5"),
-                Formatter.generate_latex_table(res_vw_cty, "Q"),
-                Formatter.generate_long_short_latex_table(ls_vw_cty),
-
-                latex_fmb_c
-            )
-            latex_output_c = Formatter._inject_title_fallback(latex_output_c, country_title)
-
-        prefix = f"countries/country_{safe_country}"
-        results.update({
-            f"{prefix}/ff3_equal.txt": ff3_eq_c,
-            f"{prefix}/ff5_equal.txt": ff5_eq_c,
-            f"{prefix}/q_equal.txt":   q_eq_c,
-            f"{prefix}/long_short_equal.txt": ls_eq_c_txt,
-            f"{prefix}/ff3_value.txt": ff3_vw_c,
-            f"{prefix}/ff5_value.txt": ff5_vw_c,
-            f"{prefix}/q_value.txt":   q_vw_c,
-            f"{prefix}/long_short_value.txt": ls_vw_c_txt,
-            f"{prefix}/fama_macbeth.txt": fm_c_text,
-            f"{prefix}/output.tex": latex_output_c,
-        })
 
     # ---------- Write ZIP ----------
     with zipfile.ZipFile(zip_path, 'w') as zipf:
