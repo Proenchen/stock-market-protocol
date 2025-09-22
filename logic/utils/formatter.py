@@ -211,7 +211,7 @@ class Formatter:
 
         # Final LaTeX table
         table = (
-            r"\begin{table}[htbp]" + "\n"
+            r"\begin{table}[H]" + "\n"
             r"\centering" + "\n"
             r"\begin{tabular}{l" + "c" * len(factor_order[model_name]) + "}" + "\n"
             r"\toprule" + "\n"
@@ -279,7 +279,7 @@ class Formatter:
 
         # Full table
         table = (
-            r"\begin{table}[htbp]" + "\n"
+            r"\begin{table}[H]" + "\n"
             r"\centering" + "\n"
             r"\begin{tabular}{l" + "c" * len(all_factors) + "}" + "\n"
             r"\toprule" + "\n"
