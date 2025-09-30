@@ -6,7 +6,7 @@ import threading
 from queue import Queue
 from flask import Flask, render_template, redirect, url_for, request
 from logic.utils.mailing import Mail
-from logic.analysis import run_complete_analysis
+from logic.analysis import Analysis
 
 import traceback
 
@@ -28,7 +28,7 @@ def worker():
             else:
                 raise ValueError("Error: Only CSV- or Excel-files are allowed.")
 
-            zip_path = run_complete_analysis(df, signal_name)
+            zip_path = Analysis.run_complete_analysis(df, signal_name)
             Mail.send_email_with_attachment(
                 to_email=email,
                 subject=f"Global Stock Market Protocol Analysis RESULTS - {signal_name}",
@@ -44,7 +44,7 @@ def worker():
             )
 
             tb = traceback.extract_tb(e.__traceback__)
-            filename, lineno, func, text = tb[-1]   # letzte Stelle im Traceback
+            filename, lineno, func, text = tb[-1]  
             msg = (
                 f"An error occurred during processing:\n\n"
                 f"{str(e)}\n\n"

@@ -7,9 +7,31 @@ from pathlib import Path
 from typing import Tuple
 
 class Formatter:
+    """Helpers to format regression outputs and LaTeX documents.
+
+    This class provides static utilities to:
+    - Convert regression results into plain-text blocks.
+    - Build LaTeX tables for FF3/FF5/Q decile regressions and long–short models.
+    - Assemble a full LaTeX document from given table fragments.
+    - Compile a LaTeX .tex file into a PDF in a temporary directory.
+    - Escape LaTeX special characters and inject a title when needed.
+    """
 
     @staticmethod
     def results_to_strings(results: dict) -> Tuple[str, str, str]:
+        """Create plain-text summaries for FF3, FF5, and Q per decile.
+
+        Parameters
+        ----------
+        results : dict
+            Mapping of decile/slice to a dict with keys 'FF3', 'FF5', 'Q', each
+            containing a statsmodels regression results wrapper.
+
+        Returns
+        -------
+        Tuple[str, str, str]
+            The concatenated text summaries for FF3, FF5, and Q respectively.
+        """
         ff3_str, ff5_str, q_str = "", "", ""
         for q, res in results.items():
             ff3_str += f"\n--- Slice {q} ---\n{res['FF3'].summary().as_text()}\n"
@@ -20,6 +42,18 @@ class Formatter:
 
     @staticmethod
     def long_short_res_to_string(result: dict) -> str:
+        """Create a plain-text summary for the long–short (D10–D1) portfolio.
+
+        Parameters
+        ----------
+        result : dict
+            Dict with keys 'FF3', 'FF5', 'Q' mapping to statsmodels results.
+
+        Returns
+        -------
+        str
+            Combined multi-section text with model summaries.
+        """
         output = ""
         output = "\n======= Long-Short Portfolio (Slice 10 - Slice 1) =======\n"
         output += "\n--- FF3 Regression ---\n" + result["FF3"].summary().as_text()
@@ -30,6 +64,24 @@ class Formatter:
     
     @staticmethod
     def fama_macbeth_res_to_string(means: pd.Series, tstats: pd.Series, n_months: int, signal_name: str) -> str:
+        """Render Fama–MacBeth average coefficients and t-stats as text.
+
+        Parameters
+        ----------
+        means : pd.Series
+            Time-series averages of monthly cross-sectional coefficients.
+        tstats : pd.Series
+            FM t-statistics aligned to the same coefficient names.
+        n_months : int
+            Number of months used in the FM aggregation.
+        signal_name : str
+            Pretty name for the signal to display instead of 'Signal'.
+
+        Returns
+        -------
+        str
+            A multi-line block with coefficient names, means, and t-stats.
+        """
         lines = [f"\n======= Fama-MacBeth Results (T={n_months} months) =======\n"] 
         for coef in means.index:
             coef_name = signal_name if coef == "Signal" else coef
@@ -38,6 +90,7 @@ class Formatter:
     
     @staticmethod
     def generate_fama_macbeth_latex_table(means: pd.Series, tstats: pd.Series, signal_name: str):
+        """Build a LaTeX table for Fama–MacBeth mean coefficients and t-stats."""
         rows = []
         for coef in means.index:
             coef_name = Formatter._latex_escape(signal_name) if coef == "Signal" else coef
@@ -61,8 +114,17 @@ class Formatter:
 
     @staticmethod
     def alpha_table_to_latex(df: pd.DataFrame, group_name: str, caption: str) -> str:
-        """
-        df: Zeilen = Gruppen/Schemata, Spalten = ['FF3','FF5','Q'], Zellen: 'alpha (t)'
+        """Render a compact per-group alpha table (single page).
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Rows are groups/schemes; columns in {'FF3','FF5','Q'}; cells are
+            LaTeX strings like 'alpha [t]'.
+        group_name : str
+            Column header for the group identifier.
+        caption : str
+            LaTeX caption for the table.
         """
         cols = ["FF3","FF5","Q"]
         cols = [c for c in cols if c in df.columns]
@@ -83,10 +145,11 @@ class Formatter:
     
     @staticmethod
     def alpha_table_to_latex_four_quarters_two_pages(df: pd.DataFrame, group_name: str, caption: str) -> str:
-        # Spaltenauswahl
+        """Render a large per-group alpha table across two pages (4 blocks)."""
+        # Select columns present
         cols = [c for c in ["FF3", "FF5", "Q"] if c in df.columns]
 
-        # In 4 möglichst gleich große Teile splitten
+        # Split into four nearly equal parts
         n = len(df)
         q, r = divmod(n, 4)
         sizes = [(q + 1 if i < r else q) for i in range(4)]
@@ -96,10 +159,10 @@ class Formatter:
             parts.append(df.iloc[start:start+s])
             start += s
 
-        # Für jedes Teilstück ein Tabular in einer Minipage bauen (ohne Hilfsfunktionen)
+        # Build a tabular inside a minipage for each part
         tabulars = []
         for part in parts:
-            # Body-Zeilen
+            # Body rows
             rows = []
             for idx in part.index:
                 row_cells = [Formatter._latex_escape(str(idx))]
@@ -109,7 +172,7 @@ class Formatter:
                 rows.append(" & ".join(row_cells) + r" \\[12pt]")
             body = "\n".join(rows)
 
-            # Header + vollständiges tabular
+            # Header + full tabular
             header = f"{group_name} & " + " & ".join(cols) + r" \\ \midrule"
             tabular = (
                 "\\begin{minipage}{0.48\\linewidth}\n" +
@@ -117,14 +180,14 @@ class Formatter:
                 "\\begin{tabular}{l" + "c"*len(cols) + "}\n" +
                 "\\toprule\n" +
                 header + "\n" +
-                body + ("\n" if body else "") +  # falls leer, keine Extrazeile
+                body + ("\n" if body else "") +  # if empty, avoid extra newline
                 "\\bottomrule\n" +
                 "\\end{tabular}\n" +
                 "\\end{minipage}\n"
                 )
             tabulars.append(tabular)
 
-        # Sicherstellen, dass wir 4 Elemente haben (können leer sein)
+        # Ensure we have 4 entries (may be empty)
         while len(tabulars) < 4:
             tabulars.append(
                 "\\begin{minipage}{0.48\\linewidth}\n\\centering\n" +
@@ -133,7 +196,7 @@ class Formatter:
                 "\\bottomrule\n\\end{tabular}\n\\end{minipage}\n"
             )
 
-        # Seite 1: links Q1, rechts Q2
+        # Page 1: left Q1, right Q2
         page1 = (
             "\\begin{table}[H]\n\\centering\n"
             + tabulars[0]
@@ -142,7 +205,7 @@ class Formatter:
             + "\\end{table}\n"
         )
 
-        # Seite 2: links Q3, rechts Q4
+        # Page 2: left Q3, right Q4
         page2 = (
             "\\begin{table}[H]\n\\centering\n"
             + tabulars[2]
@@ -152,20 +215,24 @@ class Formatter:
             + "\\end{table}\n"
         )
 
-        # Seitenumbruch dazwischen
+        # Page break between the two
         return page1 + "\\newpage\n" + page2
                     
     @staticmethod
     def generate_latex_table(results_dict: dict, model_name: str) -> str:
-        """
-        Generates a LaTeX table from regression results.
+        """Generate a LaTeX table for one factor model across deciles.
 
-        Args:
-            results_dict (dict): Dictionary mapping slice to statsmodels regression results.
-            model_name (str): One of 'FF3', 'FF5', or 'Q'.
+        Parameters
+        ----------
+        results_dict : dict
+            Mapping from decile/slice to regression results by model.
+        model_name : str
+            One of 'FF3', 'FF5', or 'Q'.
 
-        Returns:
-            str: LaTeX code for the table.
+        Returns
+        -------
+        str
+            LaTeX code for a tabular with coefficients and t-stats.
         """
 
         factor_order = {
@@ -225,14 +292,17 @@ class Formatter:
     
     @staticmethod
     def generate_long_short_latex_table(results_dict: dict) -> str:
-        """
-        Generates a LaTeX table for the long-short regression results across FF3, FF5, and Q models.
+        """Generate a LaTeX table for long–short regression results across models.
 
-        Args:
-            res_ff3, res_ff5, res_q (RegressionResultsWrapper): Regression results for each model.
+        Parameters
+        ----------
+        results_dict : dict
+            Dict mapping 'FF3', 'FF5', 'Q' to statsmodels results wrappers.
 
-        Returns:
-            str: LaTeX code for the table.
+        Returns
+        -------
+        str
+            LaTeX code with one row per model and columns for all factors.
         """
         models = {
             'FF3': results_dict["FF3"],
@@ -309,17 +379,9 @@ class Formatter:
         country_aggregated_tex: str,
         title: str = "Global Stock Market Protocol Analysis Results"
     ) -> str:
-        """
-        Wraps given LaTeX tables into a complete .tex document.
+        """Wrap provided LaTeX tables into a complete article-class document.
 
-        Args:
-            ff3_tex (str): LaTeX table for FF3 model.
-            ff5_tex (str): LaTeX table for FF5 model.
-            q_tex (str): LaTeX table for Q-Factor model.
-            title (str): Title of the LaTeX document.
-
-        Returns:
-            str: Full LaTeX document as a string.
+        Returns the LaTeX source as a single string.
         """
         document = r"""\documentclass[11pt]{article}
 \usepackage[utf8]{inputenc}
@@ -383,15 +445,19 @@ class Formatter:
     
     @staticmethod
     def tex_file_to_pdf(tex_path: str, output_path: str) -> str:
-        """
-        Compiles a LaTeX .tex file into a PDF.
+        """Compile a .tex file with pdflatex and write the resulting PDF.
 
-        Args:
-            tex_path (str): Path to the input .tex file.
-            output_path (str): Path where the output PDF should be saved.
+        Parameters
+        ----------
+        tex_path : str
+            Path to the .tex source file to compile.
+        output_path : str
+            Destination path for the compiled PDF.
 
-        Returns:
-            str: The absolute path to the generated PDF.
+        Returns
+        -------
+        str
+            Absolute path to the generated PDF.
         """
         tex_path = Path(tex_path).resolve()
         output_path = Path(output_path).resolve()
@@ -426,18 +492,23 @@ class Formatter:
     
     @staticmethod
     def _inject_title_fallback(doc: str, title: str) -> str:
+        """Inject a LaTeX \title if missing, otherwise replace the existing one.
+
+        Behavior
+        --------
+        1) If a "\\title{" exists, replace its contents.
+        2) Otherwise, insert a title and \maketitle before \begin{document}.
+        """
         # If Formatter can't take a doc_title kwarg, inject it into the LaTeX string.
         # 1) Replace existing \title{...} if present; else
         # 2) Insert \title{...}\maketitle before \begin{document}.
         if r'\title{' in doc:
-            return re.sub(r'\\title\{.*?\}', f'\\title{{{title}}}', doc, count=1, flags=re.S)
-        return doc.replace(r'\begin{document}', f'\\title{{{title}}}\n\\maketitle\n\\begin{document}', 1)
+            return re.sub(r'\\title\{[^\}]*\}', f'\\title{{{title}}}', doc, count=1, flags=re.S)
+        return doc.replace(r'\begin{document}', f'\\title{{{title}}}\n\\maketitle\n' +'\\begin{document}', 1)
 
     @staticmethod
     def _latex_escape(s: str) -> str:
-        """
-        Escape LaTeX special chars in strings for safe use inside LaTeX documents.
-        """
+        """Escape LaTeX special characters in arbitrary strings."""
         replacements = {
             "\\": r"\textbackslash{}",
             "_": r"\_",
