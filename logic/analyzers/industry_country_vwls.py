@@ -9,8 +9,9 @@ from logic.analyzers.base import AutoRegistered, AnalyzerOutput
 from logic.utils.formatter import Formatter
 
 
-GROUP_NUM_SLICES = 5
-MAX_ROWS_SINGLE = 20
+GROUP_NUM_SLICES = 10           # Number of quantiles for long-short
+MAX_ROWS_SINGLE = 20            # Number of countries that fit on a single page
+MIN_NUM_OF_OBSERVATIONS = 8     # Minimum number of observations
 
 
 class IndustryCountryVWLSAnalyzer(BaseAnalyzer, AutoRegistered):
@@ -30,7 +31,7 @@ class IndustryCountryVWLSAnalyzer(BaseAnalyzer, AutoRegistered):
     MODEL_SPECS = {
         "FF3": ["MKTRF_usd", "SMB_usd", "HML_usd"],
         "FF5": ["MKTRF_usd", "SMB_usd", "HML_usd", "RMW_A_usd", "CMA_usd"],
-        "Q": ["MKTRF_usd", "ME_usd", "IA_usd", "ROE_usd"],
+        "Q": ["EIGA_usd", "ME_usd", "IA_usd", "ROE_usd"],
     }
 
     def __init__(self, ctx, df_input: pd.DataFrame, signal_name: str) -> None:
@@ -237,10 +238,10 @@ class IndustryCountryVWLSAnalyzer(BaseAnalyzer, AutoRegistered):
         rows = []
         for grp, s in ls.groupby(level=1):  # time series for each group
             ts = s.droplevel(1)
-            if ts.size < 8:  # too few months for a stable regression → skip
+            if ts.size < MIN_NUM_OF_OBSERVATIONS:  # too few months for a stable regression → skip
                 continue
             df_ts = pd.DataFrame({"LS": ts}).join(fac, how="inner")
-            y = df_ts["LS"] - df_ts["rf_ff"]  # excess
+            y = df_ts["LS"]
             row = {"group": grp}
             for name, cols in self.MODEL_SPECS.items():
                 a, t = self._fit_alpha(y, df_ts[cols])
@@ -288,7 +289,7 @@ class IndustryCountryVWLSAnalyzer(BaseAnalyzer, AutoRegistered):
             dec = self._aggregate_over_groups(wide, mcap, scheme)
             ls = dec[GROUP_NUM_SLICES] - dec[1]
             df_ts = pd.DataFrame({"LS": ls}).join(fac, how="inner")
-            y = df_ts["LS"] - df_ts["rf_ff"]
+            y = df_ts["LS"]
 
             row = {"scheme": scheme_name}
             for name, cols in self.MODEL_SPECS.items():

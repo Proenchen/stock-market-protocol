@@ -5,8 +5,10 @@ import shutil
 import threading
 from queue import Queue
 from flask import Flask, render_template, redirect, url_for, request
+from logic.utils.abbreviation_mapping import ISO_TO_NAME, FF12_LABELS
 from logic.utils.mailing import Mail
 from logic.analysis import Analysis
+from logic.compose.registry import Registry
 
 import traceback
 
@@ -17,7 +19,7 @@ task_queue = Queue()
 
 def worker():
     while True:
-        file_bytes, filename, email, signal_name = task_queue.get()
+        file_bytes, filename, email, signal_name, selected_analyzers, country_filter, ff12_filter = task_queue.get()
         try:
             file_obj = io.BytesIO(file_bytes)
 
@@ -28,12 +30,18 @@ def worker():
             else:
                 raise ValueError("Error: Only CSV- or Excel-files are allowed.")
 
-            zip_path = Analysis.run_complete_analysis(df, signal_name)
+            zip_path = Analysis.run_complete_analysis(
+                df, 
+                signal_name, selected_analyzers=selected_analyzers,                 
+                country_filter=country_filter,
+                ff12_filter=ff12_filter
+            )
+            
             Mail.send_email_with_attachment(
                 to_email=email,
                 subject=f"Global Stock Market Protocol Analysis RESULTS - {signal_name}",
                 body="Attached are the results of your analysis.",
-                attachment_path=zip_path
+                attachment_path=zip_path,
             )
 
         except Exception as e:
@@ -85,10 +93,6 @@ def index() -> redirect:
 def home() -> str:
     return render_template('home.html')
 
-@app.route('/upload')
-def upload() -> str:
-    return render_template('upload.html')
-
 @app.route('/overview')
 def overview() -> str:
     return render_template('overview.html')
@@ -109,22 +113,76 @@ def contact() -> str:
 def navbar() -> str:
     return render_template('navbar.html')
 
+@app.route('/upload')
+def upload() -> str:
+    # Analyzer-Liste (wie bei dir)
+    analyzers = []
+    for cls in Registry.list_all_analyzers():
+        analyzers.append({
+            "fullname": f"{cls.__module__}.{cls.__name__}",
+            "cls_name": cls.__name__,
+            "title": getattr(cls, "TITLE", None),
+            "order": getattr(cls, "ORDER", 100),
+            "enabled": bool(getattr(cls, "ENABLED", False)),
+        })
+    analyzers.sort(key=lambda a: a["order"])
+
+    # NEU: Länder & Industrien für die Dropdowns
+    countries, industries = _read_crsp_uniques()
+    return render_template('upload.html', analyzers=analyzers, countries=countries, industries=industries)
+
+# app.py (Ausschnitt)
+
 @app.route('/upload_excel', methods=['POST'])
 def upload_excel() -> str:
     uploaded_file = request.files.get("excel-file")
     email = request.form.get("user-email")
     signal_name = request.form.get("signal-name")
 
+    selected_analyzers = request.form.getlist("enabled_tests")
+    country_filter = request.form.getlist("countries")    
+    ff12_filter_raw = request.form.getlist("industries")  
+    ff12_filter = [int(x) for x in ff12_filter_raw if x.isdigit()]
+
     if uploaded_file:
         file_bytes = uploaded_file.read()
         filename = uploaded_file.filename.lower()
-
-        # Add task to queue (processed sequentially by worker)
-        task_queue.put((file_bytes, filename, email, signal_name))
-
+        task_queue.put((file_bytes, filename, email, signal_name, selected_analyzers, country_filter, ff12_filter))
         return render_template('success.html')
 
-    return render_template('upload.html', result="No file uploaded.")
+    analyzers = []
+    for cls in Registry.list_all_analyzers():
+        analyzers.append({
+            "fullname": f"{cls.__module__}.{cls.__name__}",
+            "cls_name": cls.__name__,
+            "title": getattr(cls, "TITLE", None),
+            "order": getattr(cls, "ORDER", 100),
+            "enabled": bool(getattr(cls, "ENABLED", False)),
+        })
+    analyzers.sort(key=lambda a: a["order"])
+    countries, industries = _read_crsp_uniques()
+    return render_template('upload.html', analyzers=analyzers, countries=countries, industries=industries, result="No file uploaded.")
+
+
+
+def _read_crsp_uniques():
+    """Einmalig die verfügbaren Länder/FF12 aus der CSV lesen."""
+    crsp_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "dsws_crsp.csv")
+    df = pd.read_csv(crsp_path, usecols=["country", "ff12"])
+    # Länder
+    df["country"] = df["country"].astype(str).str.strip()
+    country_codes = sorted({c.lower() for c in df["country"].dropna().unique()})
+    countries = []
+    for code in country_codes:
+        name = ISO_TO_NAME.get(code, code) 
+        countries.append({"code": code, "name": name})
+    countries.sort(key=lambda x: x["name"])
+
+    # FF12
+    ff = pd.to_numeric(df["ff12"], errors="coerce").dropna().astype(int).unique().tolist()
+    ff = sorted([f for f in ff if 1 <= f <= 12])
+    industries = [{"code": f, "name": FF12_LABELS.get(f, f"FF12 {f}")} for f in ff]
+    return countries, industries
 
 
 if __name__ == "__main__":

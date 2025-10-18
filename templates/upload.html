@@ -64,21 +64,116 @@
             <div class="row mb-3">
                 <div class="col-md-6 mb-3">
                     <label for="user-email" class="form-label">
-                        Email Address <span class="text-danger">*</span>
+                        <strong>Email Address</strong> <span class="text-danger">*</span>
                     </label>
-                    <input type="email" class="textbox" id="user-email" name="user-email"
-                        placeholder="you@example.com" required>
+                    <input type="email" class="textbox" id="user-email" name="user-email" placeholder="you@example.com"
+                        required>
                     <div class="invalid-feedback">Please enter a valid email address.</div>
                 </div>
 
                 <!-- Identifier field -->
                 <div class="col-md-6 mb-3">
                     <label for="signal-name" class="form-label">
-                        Signal Identifier <span class="text-danger">*</span>
+                        <strong>Signal Identifier</strong> <span class="text-danger">*</span>
                     </label>
                     <input type="text" class="textbox" id="signal-name" name="signal-name"
                         placeholder="e.g., signal_123" required>
                     <div class="invalid-feedback">Please provide an identifier.</div>
+                </div>
+                <div class="col-12 mb-3">
+                    <label for="test-list-title" class="form-label d-flex align-items-center gap-2">
+                        <strong>Test Selection</strong>
+                    </label>
+                    <div class="row" id="tests-list">
+                        {% for a in analyzers %}
+                        <div class="col-md-6 col-lg-4 mb-2">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="enabled_tests"
+                                    id="chk-{{ loop.index }}" value="{{ a.fullname }}" {% if a.enabled %}checked{% endif
+                                    %}>
+                                <label class="form-check-label" for="chk-{{ loop.index }}">
+                                    {{ a.title or a.cls_name }}
+                                </label>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <!-- Test Configuration -->
+                <div class="col-12 mb-3">
+                    <label class="form-label d-flex align-items-center gap-2" id="test-config-label">
+                        <strong>Test Configuration</strong>
+                    </label>
+
+                    <div class="row g-3" aria-labelledby="test-config-label">
+                        <!-- Countries -->
+                        <div class="col-md-6">
+                            <label class="form-label" for="countriesDropdown">Filter by Countries</label>
+                            <div class="dropup ms-dropdown w-100">
+                                <button
+                                    class="btn textbox d-flex justify-content-between align-items-center w-100 dropdown-toggle"
+                                    type="button" id="countriesDropdown" data-bs-toggle="dropdown"
+                                    data-bs-auto-close="outside" aria-expanded="false">
+                                    <span class="ms-label">Select countries</span>
+                                    <span class="badge bg-secondary ms-badge">0</span>
+                                </button>
+                                <div class="dropdown-menu p-2 w-100 ms-menu" aria-labelledby="countriesDropdown">
+                                    <div class="d-flex gap-2 mb-2">
+                                        <input type="text" class="textbox ms-search flex-grow-1"
+                                            placeholder="Search countries…" />
+                                        <button type="button"
+                                            class="btn btn-sm btn-outline-secondary ms-select-all">All</button>
+                                        <button type="button"
+                                            class="btn btn-sm btn-outline-secondary ms-clear">Clear</button>
+                                    </div>
+                                    <div class="ms-list">
+                                        {% for c in countries %}
+                                        <label class="form-check d-flex align-items-center py-1">
+                                            <input class="form-check-input me-2" type="checkbox"
+                                                data-value="{{ c.code }}" data-label="{{ c.name }}">
+                                            <span class="form-check-label">{{ c.name }}</span>
+                                        </label>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="countriesHidden" class="d-none"></div>
+                        </div>
+
+                        <!-- Industries -->
+                        <div class="col-md-6">
+                            <label class="form-label" for="industriesDropdown">Filter by Industries</label>
+                            <div class="dropup ms-dropdown w-100">
+                                <button
+                                    class="btn textbox d-flex justify-content-between align-items-center w-100 dropdown-toggle"
+                                    type="button" id="industriesDropdown" data-bs-toggle="dropdown"
+                                    data-bs-auto-close="outside" aria-expanded="false">
+                                    <span class="ms-label">Select industries</span>
+                                    <span class="badge bg-secondary ms-badge">0</span>
+                                </button>
+                                <div class="dropdown-menu p-2 w-100 ms-menu" aria-labelledby="industriesDropdown">
+                                    <div class="d-flex gap-2 mb-2">
+                                        <input type="text" class="textbox ms-search flex-grow-1"
+                                            placeholder="Search industries…" />
+                                        <button type="button"
+                                            class="btn btn-sm btn-outline-secondary ms-select-all">All</button>
+                                        <button type="button"
+                                            class="btn btn-sm btn-outline-secondary ms-clear">Clear</button>
+                                    </div>
+                                    <div class="ms-list">
+                                        {% for ind in industries %}
+                                        <label class="form-check d-flex align-items-center py-1">
+                                            <input class="form-check-input me-2" type="checkbox"
+                                                data-value="{{ ind.code }}" data-label="{{ ind.name }}">
+                                            <span class="form-check-label">{{ ind.name }}</span>
+                                        </label>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="industriesHidden" class="d-none"></div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- File upload -->
@@ -115,6 +210,7 @@
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='js/excel-upload.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/multiselect.js') }}"></script>
 </body>
 
 </html>

@@ -30,7 +30,7 @@ class FamaMacBethAnalyzer(BaseAnalyzer, AutoRegistered):
 
     ENABLED = True
     ORDER = 30
-    TITLE = "Fama–MacBeth Regression Result"
+    TITLE = "Fama–MacBeth Regression"
 
     def __init__(self, ctx, df_input: pd.DataFrame, signal_name: str) -> None:
         """Initialize analyzer with shared context, data, and a signal label.

@@ -1,38 +1,30 @@
 import pkgutil
 import importlib
-from typing import List, Type
+from typing import List, Type, Iterable
 
 from logic.analyzers.base import AutoRegistered, BaseAnalyzer
 
 
 class Registry:
     @staticmethod
-    def discover_analyzers(package: str = "logic.analyzers") -> List[Type[BaseAnalyzer]]:
-        """Discover and return all enabled analyzers in a package.
-
-        Parameters
-        ----------
-        package : str, optional
-            The package path (default is ``"logic.analyzers"``).
-
-        Returns
-        -------
-        list of Type[BaseAnalyzer]
-            A list of analyzer classes discovered and enabled, sorted by their
-            ``ORDER`` attribute (defaulting to 100 if missing).
-        """
-        # Import the base package
+    def list_all_analyzers(package: str = "logic.analyzers") -> List[Type[BaseAnalyzer]]:
+        """Alle registrierten Analyzer zurückgeben – unabhängig von ENABLED."""
         pkg = importlib.import_module(package)
-        # Walk through submodules and import each one to trigger class registration
         for _, modname, _ in pkgutil.walk_packages(pkg.__path__, pkg.__name__ + "."):
             importlib.import_module(modname)
 
-        # Collect registered analyzers that are enabled
-        candidates: list[Type[BaseAnalyzer]] = []
-        for cls in AutoRegistered._registry:
-            if hasattr(cls, "ENABLED") and getattr(cls, "ENABLED"):
-                candidates.append(cls)
+        return sorted(AutoRegistered._registry, key=lambda c: getattr(c, "ORDER", 100))
 
-        # Ensure consistent ordering by ORDER attribute
-        candidates.sort(key=lambda c: getattr(c, "ORDER", 100))
-        return candidates
+
+    @staticmethod
+    def discover_selected_analyzers(selected_fullnames: Iterable[str], package: str = "logic.analyzers") -> List[Type[BaseAnalyzer]]:
+        """Nur die vom User ausgewählten Analyzer (per qualifiziertem Klassenname) liefern.
+
+        Args:
+        selected_fullnames: Iterable voll qualifizierter Klassennamen
+        (z. B. "logic.analyzers.performance.PerformanceAnalyzer")
+        """
+        selected_set = set(selected_fullnames or [])
+        all_cls = Registry.list_all_analyzers(package)
+        picked = [c for c in all_cls if f"{c.__module__}.{c.__name__}" in selected_set]
+        return picked

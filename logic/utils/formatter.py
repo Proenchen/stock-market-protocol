@@ -238,12 +238,13 @@ class Formatter:
         factor_order = {
             "FF3": ["const", "MKTRF_usd", "SMB_usd", "HML_usd"],
             "FF5": ["const", "MKTRF_usd", "SMB_usd", "HML_usd", "RMW_A_usd", "CMA_usd"],
-            "Q"  : ["const", "MKTRF_usd", "ME_usd", "IA_usd", "ROE_usd"]
+            "Q"  : ["const", "EIGA_usd", "ME_usd", "IA_usd", "ROE_usd"]
         }
 
         factor_labels = {
             'const': r'$\alpha$',
             'MKTRF_usd': r'$\beta_{MKT}$',
+            'EIGA_usd': r'$\beta_{EIGA}$',
             'SMB_usd': r'$\beta_{SMB}$',
             'HML_usd': r'$\beta_{HML}$',
             'RMW_A_usd': r'$\beta_{RMW}$',
@@ -311,7 +312,7 @@ class Formatter:
         }
 
         # Desired fixed order of all potential factors
-        all_factors = ["const", "MKTRF_usd", "SMB_usd", "HML_usd", "RMW_A_usd", "CMA_usd", "ME_usd", "IA_usd", "ROE_usd"]
+        all_factors = ["const", "MKTRF_usd", "SMB_usd", "HML_usd", "RMW_A_usd", "CMA_usd", "EIGA_usd", "ME_usd", "IA_usd", "ROE_usd"]
 
         # LaTeX-friendly labels
         factor_labels = {
@@ -321,9 +322,10 @@ class Formatter:
             'HML_usd': r'$\beta_{HML}$',
             'RMW_A_usd': r'$\beta_{RMW}$',
             'CMA_usd': r'$\beta_{CMA}$',
+            "EIGA_usd": r'$\beta_{EIGA}$',
             'ME_usd': r'$\beta_{SIZE}$',
             'IA_usd': r'$\beta_{IA}$',
-            'ROE_usd': r'$\beta_{ROE}$'
+            'ROE_usd': r'$\beta_{ROE}$',
         }
 
         # Table header

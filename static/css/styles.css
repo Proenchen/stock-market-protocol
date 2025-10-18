@@ -178,7 +178,7 @@ body:not(.lightmode) .nav-tabs .nav-link:hover {
 }
 
 .card-header {
-    background-color: var(--base-variant) !important; 
+    background-color: var(--base-variant) !important;
     color: var(--text-color) !important;
 }
 
@@ -203,7 +203,7 @@ body:not(.lightmode) .nav-tabs .nav-link:hover {
 }
 
 .textbox.is-valid {
-    border-color: #198754; 
+    border-color: #198754;
     background-color: var(--base-color);
     padding-right: 2.25rem;
     background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='%23198754' viewBox='0 0 8 8'%3e%3cpath d='M6.564 1.27L2.93 5.005 1.436 3.522l-.707.707L2.93 6.42l4.342-4.348-.708-.802z'/%3e%3c/svg%3e");
@@ -304,6 +304,86 @@ body:not(.lightmode) .nav-tabs .nav-link:hover {
     }
 }
 
+
+#tests-list .form-check-input {
+    /* Reset & Box */
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    margin-top: 0.25rem;
+    /* passt zu Bootstrap-Zeilenhöhe */
+    border: 1px solid var(--gh-border, var(--border-color));
+    border-radius: 2px;
+    /* GitHub ist eher eckig */
+    background-color: var(--gh-bg, var(--base-color));
+    display: inline-block;
+    vertical-align: text-bottom;
+    cursor: pointer;
+    outline: none;
+    box-shadow: none;
+    transition: border-color .12s ease, box-shadow .12s ease, background-color .12s ease, filter .12s ease;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 12px 12px;
+}
+
+#tests-list .form-check-input:hover {
+    filter: brightness(1.06);
+}
+
+#tests-list .form-check-input:focus {
+    border-color: #0969da;
+    box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.3);
+}
+
+#tests-list .form-check-input:checked {
+    background-color: #0969da;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 16 16'%3e%3cpath fill='white' d='M6.173 12.727L1.89 8.444l1.06-1.06 3.223 3.222 6.878-6.879 1.06 1.06z'/%3e%3c/svg%3e");
+}
+
+#tests-list .form-check-input:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+}
+
+#tests-list .form-check {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+#tests-list .form-check-label {
+    margin: 0;
+    cursor: pointer;
+    margin-left: .35rem;
+    user-select: none;
+}
+
+#tests-list .form-check-input:focus:not(:focus-visible) {
+    box-shadow: none;
+    border-color: var(--gh-border, var(--border-color));
+}
+
+#tests-list .form-check-label {
+    color: var(--text-color) !important;
+}
+
+#tests-list .form-check-input:checked+.form-check-label,
+#tests-list .form-check-input:focus+.form-check-label {
+    color: var(--text-color) !important;
+}
+
+#tests-list .form-check-input.is-valid~.form-check-label,
+#tests-list .was-validated .form-check-input:valid~.form-check-label {
+    color: var(--text-color) !important;
+}
+
+#tests-list .form-check-input.is-invalid~.form-check-label,
+#tests-list .was-validated .form-check-input:invalid~.form-check-label {
+    color: var(--text-color) !important;
+}
+
 /* 
 
 Light-Mode properties
@@ -381,7 +461,7 @@ Light-Mode properties
 }
 
 .lightmode .card-header {
-    background-color: var(--base-variant); 
+    background-color: var(--base-variant);
     color: var(--text-color);
 }
 
@@ -405,7 +485,7 @@ Light-Mode properties
 }
 
 .lightmode .textbox.is-valid {
-    border-color: #198754; 
+    border-color: #198754;
     padding-right: 2.25rem;
     background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='%23198754' viewBox='0 0 8 8'%3e%3cpath d='M6.564 1.27L2.93 5.005 1.436 3.522l-.707.707L2.93 6.42l4.342-4.348-.708-.802z'/%3e%3c/svg%3e");
     background-repeat: no-repeat;
@@ -454,4 +534,348 @@ Light-Mode properties
 
 .lightmode #theme-switch svg:first-child {
     display: block;
+}
+
+
+/* Multi-Select Dropdown (Dark/Light kompatibel) */
+.ms-dropdown .dropdown-menu.ms-menu {
+    max-height: 320px;
+    overflow: auto;
+    background-color: var(--base-variant);
+    border: 1px solid var(--border-color);
+    min-width: 100%;
+}
+
+.ms-dropdown .ms-list {
+    max-height: 220px;
+    overflow: auto;
+    padding-right: 4px;
+}
+
+.ms-dropdown .form-check-input {
+    margin-top: 0;
+    /* schöner vertikal mittig */
+}
+
+.ms-dropdown .form-check-label {
+    color: var(--text-color);
+}
+
+.ms-dropdown .ms-search {
+    background-color: var(--base-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+}
+
+.ms-dropdown .ms-search:focus {
+    border-color: #0969da;
+    box-shadow: 0 0 0 3px rgba(9, 105, 218, .2);
+}
+
+.lightmode .ms-dropdown .dropdown-menu.ms-menu {
+    background-color: var(--base-color);
+}
+
+/* =========================
+   GitHub-like Select Menu
+   für .ms-dropdown
+   ========================= */
+
+/* Button wie GitHub-Select */
+.ms-dropdown .dropdown-toggle {
+    background: var(--base-color);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-weight: 500;
+    padding: 6px 10px;
+    line-height: 1.5;
+}
+
+.ms-dropdown .dropdown-toggle:focus {
+    border-color: #0969da;
+    box-shadow: 0 0 0 3px rgba(9, 105, 218, .3);
+}
+
+/* Menü-Panel */
+.ms-dropdown .dropdown-menu.ms-menu {
+    min-width: 100%;
+    border: 1px solid var(--gh-menu-border, var(--border-color));
+    border-radius: 6px;
+    padding: 8px;
+    background: var(--gh-menu-bg, var(--base-variant));
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .2);
+}
+
+/* Suchzeile und Aktionen */
+.ms-dropdown .ms-search {
+    height: 32px;
+    border-radius: 6px;
+}
+
+.ms-dropdown .ms-select-all,
+.ms-dropdown .ms-clear {
+    border-radius: 6px;
+    padding: 4px 8px;
+    line-height: 1.2;
+}
+
+/* Listeneinträge im Menü */
+.ms-dropdown .ms-list {
+    margin-top: 6px;
+    max-height: 240px;
+    overflow: auto;
+    padding-right: 4px;
+}
+
+.ms-dropdown .ms-list .form-check {
+    position: relative;
+    padding: 6px 32px 6px 6px;
+    /* Platz rechts für Checkmark */
+    border-radius: 6px;
+    margin: 2px 0;
+}
+
+.ms-dropdown .ms-list .form-check:hover {
+    background: var(--gh-item-hover, rgba(255, 255, 255, 0.06));
+}
+
+.ms-dropdown .ms-list .form-check-input {
+    margin-top: 0;
+}
+
+.ms-dropdown .ms-list .form-check-label {
+    color: var(--text-color);
+}
+
+/* Checkmark rechts (wie GitHub) */
+.ms-dropdown .ms-list .form-check .form-check-input+.form-check-label::after {
+    content: "";
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    opacity: 0;
+    transition: opacity .12s ease;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 16px 16px;
+    /* weißer Haken */
+    background-image: url("data:image/svg+xml,%3csvg width='16' height='16' xmlns='http://www.w3.org/2000/svg'%3e%3cpath fill='%23ffffff' d='M6.173 12.727L1.89 8.444l1.06-1.06 3.223 3.222 6.878-6.879 1.06 1.06z'/%3e%3c/svg%3e");
+}
+
+/* eingeblendeter Haken, wenn angehakt */
+.ms-dropdown .ms-list .form-check-input:checked+.form-check-label::after {
+    opacity: 1;
+}
+
+/* dezente Trennlinie optional */
+.ms-dropdown .dropdown-divider {
+    border-top-color: var(--gh-menu-border, var(--border-color));
+    opacity: 1;
+}
+
+/* Scrollbar (dezent) */
+.ms-dropdown .ms-list::-webkit-scrollbar {
+    width: 10px;
+}
+
+.ms-dropdown .ms-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.ms-dropdown .ms-list::-webkit-scrollbar-thumb {
+    background-color: rgba(128, 128, 128, 0.35);
+    border-radius: 10px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+}
+
+/* Badge optisch wie GitHub Pill */
+.ms-dropdown .ms-badge {
+    background: rgba(110, 118, 129, .4);
+    font-weight: 600;
+    border-radius: 999px;
+}
+
+/* Light/Dark Feintuning */
+:root {
+    --gh-menu-bg: var(--base-variant);
+    --gh-menu-border: var(--border-color);
+    --gh-item-hover: rgba(255, 255, 255, 0.06);
+}
+
+.lightmode {
+    --gh-menu-bg: #fff;
+    --gh-menu-border: #d0d7de;
+    --gh-item-hover: #f6f8fa;
+}
+
+.lightmode .ms-dropdown .dropdown-toggle {
+    background: #fff;
+}
+
+.lightmode .ms-dropdown .ms-badge {
+    background: #d0d7de;
+}
+
+.ms-dropdown .ms-badge {
+    display: none !important;
+}
+
+/* 1) Dark Mode: Text der geschlossenen Dropdown-Schaltfläche immer weiß */
+body:not(.lightmode) .ms-dropdown .dropdown-toggle {
+    color: var(--text-color) !important;
+    /* bleibt weiß/grau je nach Theme */
+}
+
+/* 2) Hover: Rand NICHT verändern, nur Cursor als Hand */
+.ms-dropdown .dropdown-toggle:hover {
+    border-color: var(--border-color) !important;
+    /* unverändert */
+    box-shadow: none !important;
+    /* kein zusätzlicher Schatten */
+    cursor: pointer;
+    /* Hand-Cursor */
+}
+
+/* 3) Fokus: nur beim echten Fokus den Ring zeigen (deins existiert schon),
+   hier optional nochmal sicherstellen, dass nur :focus greift */
+.ms-dropdown .dropdown-toggle:focus {
+    border-color: #0969da;
+    box-shadow: 0 0 0 3px rgba(9, 105, 218, .3);
+}
+
+/* 4) Im Menü: Alle auswählbaren Einträge mit Hand-Cursor */
+.ms-dropdown .ms-list .form-check,
+.ms-dropdown .ms-list .form-check * {
+    cursor: pointer;
+}
+
+/* 5) Optional – auch die "Select all" / "Clear" Buttons haben Hand-Cursor */
+.ms-dropdown .ms-select-all,
+.ms-dropdown .ms-clear {
+    cursor: pointer;
+}
+
+/* 6) Falls Bootstrap dem Button-Text im Light Mode Blau o.ä. gibt, hier neutral halten */
+.lightmode .ms-dropdown .dropdown-toggle {
+    color: #24292f;
+    /* GitHub-ähnlich, neutral dunkel */
+}
+
+/* 7) Sicherheitshalber: keine Border-Änderung auf :active/:focus-visible Hover-Kombis */
+.ms-dropdown .dropdown-toggle:hover:active,
+.ms-dropdown .dropdown-toggle:hover:focus-visible {
+    border-color: var(--border-color) !important;
+    box-shadow: none !important;
+}
+
+/* Einheitlicher GitHub-like Buttonstil für All/Clear (Dark + Light) */
+.ms-dropdown .ms-select-all,
+.ms-dropdown .ms-clear {
+    /* Bootstrap-Styles überstimmen */
+    background: transparent !important;
+    border: 1px solid var(--ms-btn-border, #30363d) !important;
+    color: var(--ms-btn-fg, #c9d1d9) !important;
+    border-radius: 6px;
+    padding: 4px 10px;
+    line-height: 1.2;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: none !important;
+    transition: background-color .12s ease, border-color .12s ease, box-shadow .12s ease;
+}
+
+/* Hover: nur leicht hinterlegen, keine Randänderung */
+.ms-dropdown .ms-select-all:hover,
+.ms-dropdown .ms-clear:hover {
+    background: var(--ms-btn-hover-bg, rgba(110, 118, 129, .2)) !important;
+    border-color: var(--ms-btn-border, #30363d) !important;
+}
+
+/* Active */
+.ms-dropdown .ms-select-all:active,
+.ms-dropdown .ms-clear:active {
+    background: var(--ms-btn-active-bg, rgba(110, 118, 129, .35)) !important;
+    box-shadow: none !important;
+}
+
+/* Fokus-Ring wie bei deinen Inputs */
+.ms-dropdown .ms-select-all:focus,
+.ms-dropdown .ms-clear:focus {
+    outline: none !important;
+    box-shadow: 0 0 0 3px rgba(9, 105, 218, .3) !important;
+    border-color: #0969da !important;
+}
+
+/* ---------- Darkmode-Defaults (passen zu deinem Theme) ---------- */
+:root {
+    --ms-btn-border: #30363d;
+    /* GitHub Dark border */
+    --ms-btn-fg: #c9d1d9;
+    /* GitHub Dark text */
+    --ms-btn-hover-bg: rgba(110, 118, 129, .2);
+    --ms-btn-active-bg: rgba(110, 118, 129, .35);
+}
+
+/* ---------- Lightmode-Overrides: gleiche Anmutung, helle Palette ---------- */
+.lightmode {
+    --ms-btn-border: #d0d7de;
+    /* GitHub Light border */
+    --ms-btn-fg: #24292f;
+    /* GitHub Light text */
+    --ms-btn-hover-bg: #f6f8fa;
+    /* sanfter Hover */
+    --ms-btn-active-bg: #eaeef2;
+    /* Active */
+}
+
+/* Optional: gleiche Höhe wie das Suchfeld (ästhetischer Align) */
+.ms-dropdown .ms-select-all,
+.ms-dropdown .ms-clear {
+    height: 32px;
+}
+
+/* --- 1) Checkmark im Lightmode dunkel --- */
+.lightmode .ms-dropdown .ms-list .form-check-input:checked+.form-check-label::after {
+    /* dunkler GitHub-Text (#1f2328) als Haken */
+    background-image: url("data:image/svg+xml,%3csvg width='16' height='16' xmlns='http://www.w3.org/2000/svg'%3e%3cpath fill='%231f2328' d='M6.173 12.727L1.89 8.444l1.06-1.06 3.223 3.222 6.878-6.879 1.06 1.06z'/%3e%3c/svg%3e") !important;
+    opacity: 1;
+}
+
+/* Safety: Sicherstellen, dass der Haken in allen Modi sichtbar bleibt */
+.ms-dropdown .ms-list .form-check-input:checked+.form-check-label::after {
+    opacity: 1;
+}
+
+/* --- 2) Linken “Strich”/Outline beim Selektieren/Fokus verhindern --- */
+
+/* Niemals linke Border anzeigen */
+.ms-dropdown .ms-list .form-check {
+    border-left: none !important;
+}
+
+/* Auch im Hover/Active/Checked-Zustand keine linke Border/Outline */
+.ms-dropdown .ms-list .form-check:hover,
+.ms-dropdown .ms-list .form-check:active {
+    border-left: none !important;
+}
+
+/* Fokus-Outline innerhalb der Listeneinträge deaktivieren */
+.ms-dropdown .ms-list .form-check:focus,
+.ms-dropdown .ms-list .form-check:focus-visible,
+.ms-dropdown .ms-list .form-check-label:focus,
+.ms-dropdown .ms-list .form-check-label:focus-visible,
+.ms-dropdown .ms-list .form-check-input:focus,
+.ms-dropdown .ms-list .form-check-input:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+/* Falls irgendwo doch ein farbiger Rand herkommt (Browser/BS5), neutralisieren */
+.ms-dropdown .ms-list .form-check,
+.ms-dropdown .ms-list .form-check * {
+    border-color: transparent !important;
 }

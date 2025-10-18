@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import re
 import zipfile
-from typing import Dict
+from typing import Dict, List
 
 import pandas as pd
 
@@ -15,7 +15,13 @@ from logic.utils.formatter import Formatter
 
 class Analysis:
     @staticmethod
-    def run_complete_analysis(df: pd.DataFrame, signal_name: str) -> str:
+    def run_complete_analysis(
+        df: pd.DataFrame, 
+        signal_name: str, 
+        selected_analyzers: List[str] = [], 
+        country_filter: List[str] | None = None,
+        ff12_filter: List[int] | None = None
+    ) -> str:
         """Run all analyzers, compose a LaTeX report, and bundle results as ZIP.
 
         Workflow
@@ -45,11 +51,26 @@ class Analysis:
         crsp_full = pd.read_csv("./data/dsws_crsp.csv")
         factors_full = pd.read_csv("./data/Factors.csv")
         fm_full = pd.read_csv("./data/Fama_Macbeth.csv")
+
+        if country_filter:
+            crsp_full["country"] = crsp_full["country"].astype(str).str.strip()
+            fm_full["country"] = fm_full["country"].astype(str).str.strip()
+            country_whitelist = {c.strip().lower() for c in country_filter}
+            crsp_full = crsp_full[crsp_full["country"].str.lower().isin(country_whitelist)]
+            fm_full = fm_full[fm_full["country"].str.lower().isin(country_whitelist)]
+
+        if ff12_filter:
+            # FF12-Spalte kann int/str sein -> in int konvertieren, Fehler ignorieren
+            crsp_full = crsp_full.copy()
+            crsp_full["ff12"] = pd.to_numeric(crsp_full["ff12"], errors="coerce").astype("Int64")
+            crsp_full = crsp_full[crsp_full["ff12"].isin(pd.Series(ff12_filter, dtype="Int64"))]
+
         ctx = SharedContext(crsp=crsp_full, factors=factors_full, fm=fm_full)
+        plugins = Registry.discover_selected_analyzers(selected_analyzers)
 
         # --- Analyzer auto-discovery & execution ---
         outputs = []
-        for Plugin in Registry.discover_analyzers():
+        for Plugin in plugins:
             plugin = Plugin(ctx, df, signal_name)
             out = plugin.generate_output()
             outputs.append(out)
@@ -57,7 +78,7 @@ class Analysis:
         # --- Compose LaTeX document ---
         escaped_signal = Formatter._latex_escape(signal_name)
         baseline_title = (
-            f"Global Stock Market Protocol Analysis Results for {escaped_signal} - Baseline (All Industries)"
+            f"Global Stock Market Protocol Analysis Results for {escaped_signal}"
         )
         latex_output = Composer.compose_document(baseline_title, outputs)
 

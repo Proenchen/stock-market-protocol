@@ -127,7 +127,7 @@ class ValueWeightedFactorModelAnalyzer(BaseAnalyzer, AutoRegistered):
         model_specs = {
             "FF3": ["MKTRF_usd", "SMB_usd", "HML_usd"],
             "FF5": ["MKTRF_usd", "SMB_usd", "HML_usd", "RMW_A_usd", "CMA_usd"],
-            "Q":   ["MKTRF_usd", "ME_usd", "IA_usd", "ROE_usd"],
+            "Q":   ["EIGA_usd", "ME_usd", "IA_usd", "ROE_usd"],
         }
 
         # --- 4) Excess returns & long–short ---
