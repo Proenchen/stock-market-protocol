@@ -19,7 +19,7 @@ task_queue = Queue()
 
 def worker():
     while True:
-        file_bytes, filename, email, signal_name, selected_analyzers, country_filter, ff12_filter = task_queue.get()
+        file_bytes, filename, email, signal_name, selected_analyzers, country_filter, ff12_filter, min_pct, max_pct = task_queue.get()
         try:
             file_obj = io.BytesIO(file_bytes)
 
@@ -34,7 +34,9 @@ def worker():
                 df, 
                 signal_name, selected_analyzers=selected_analyzers,                 
                 country_filter=country_filter,
-                ff12_filter=ff12_filter
+                ff12_filter=ff12_filter,
+                min_mcap_pct=min_pct,   
+                max_mcap_pct=max_pct 
             )
             
             Mail.send_email_with_attachment(
@@ -143,11 +145,18 @@ def upload_excel() -> str:
     country_filter = request.form.getlist("countries")    
     ff12_filter_raw = request.form.getlist("industries")  
     ff12_filter = [int(x) for x in ff12_filter_raw if x.isdigit()]
+                
+    min_pct_raw = request.form.get("mc-min")
+    max_pct_raw = request.form.get("mc-max")
+    min_pct = float(min_pct_raw) if (min_pct_raw not in (None, "")) else None
+    max_pct = float(max_pct_raw) if (max_pct_raw not in (None, "")) else None
 
     if uploaded_file:
         file_bytes = uploaded_file.read()
         filename = uploaded_file.filename.lower()
-        task_queue.put((file_bytes, filename, email, signal_name, selected_analyzers, country_filter, ff12_filter))
+        task_queue.put((file_bytes, filename, email, signal_name, 
+                        selected_analyzers, country_filter, ff12_filter,
+                        min_pct, max_pct))
         return render_template('success.html')
 
     analyzers = []

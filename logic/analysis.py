@@ -20,7 +20,9 @@ class Analysis:
         signal_name: str, 
         selected_analyzers: List[str] = [], 
         country_filter: List[str] | None = None,
-        ff12_filter: List[int] | None = None
+        ff12_filter: List[int] | None = None,
+        min_mcap_pct: float | None = None,    
+        max_mcap_pct: float | None = None
     ) -> str:
         """Run all analyzers, compose a LaTeX report, and bundle results as ZIP.
 
@@ -60,10 +62,28 @@ class Analysis:
             fm_full = fm_full[fm_full["country"].str.lower().isin(country_whitelist)]
 
         if ff12_filter:
-            # FF12-Spalte kann int/str sein -> in int konvertieren, Fehler ignorieren
             crsp_full = crsp_full.copy()
             crsp_full["ff12"] = pd.to_numeric(crsp_full["ff12"], errors="coerce").astype("Int64")
             crsp_full = crsp_full[crsp_full["ff12"].isin(pd.Series(ff12_filter, dtype="Int64"))]
+
+        if (min_mcap_pct is not None) or (max_mcap_pct is not None):
+            min_pct = 0.0 if min_mcap_pct is None else float(min_mcap_pct)
+            max_pct = 100.0 if max_mcap_pct is None else float(max_mcap_pct)
+            min_pct = max(0.0, min(100.0, min_pct))
+            max_pct = max(0.0, min(100.0, max_pct))
+            q_lo_crsp = crsp_full["size_lag"].astype(float).quantile(min_pct/100) if "size_lag" in crsp_full.columns else None
+            q_hi_crsp = crsp_full["size_lag"].astype(float).quantile(max_pct/100) if "size_lag" in crsp_full.columns else None
+            q_lo_fm   = fm_full["size_lag"].astype(float).quantile(min_pct/100) if "size_lag" in fm_full.columns else None
+            q_hi_fm   = fm_full["size_lag"].astype(float).quantile(max_pct/100) if "size_lag" in fm_full.columns else None
+
+            def _between(df_, col, lo, hi):
+                if lo is None or hi is None or col not in df_.columns:
+                    return df_
+                s = pd.to_numeric(df_[col], errors="coerce")
+                return df_[s.between(lo, hi, inclusive="both")]
+
+            crsp_full = _between(crsp_full, "size_lag", q_lo_crsp, q_hi_crsp)
+            fm_full   = _between(fm_full,   "size_lag", q_lo_fm,   q_hi_fm)
 
         ctx = SharedContext(crsp=crsp_full, factors=factors_full, fm=fm_full)
         plugins = Registry.discover_selected_analyzers(selected_analyzers)

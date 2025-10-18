@@ -116,12 +116,8 @@ strong {
 }
 
 .dropdown-menu {
-    background-color: var(--base-variant) !important;
+    background-color: var(--base-color) !important;
     border-color: var(--border-color) !important;
-}
-
-.dropdown-toggle:focus {
-    font-weight: 550 !important;
 }
 
 .dropdown-item {
@@ -134,7 +130,7 @@ strong {
 }
 
 .dropdown-item:focus {
-    background-color: var(--base-variant) !important;
+    background-color: var(--base-color) !important;
     color: var(--text-color) !important;
 
     &:hover {
@@ -591,11 +587,6 @@ Light-Mode properties
     line-height: 1.5;
 }
 
-.ms-dropdown .dropdown-toggle:focus {
-    border-color: #0969da;
-    box-shadow: 0 0 0 3px rgba(9, 105, 218, .3);
-}
-
 /* Menü-Panel */
 .ms-dropdown .dropdown-menu.ms-menu {
     min-width: 100%;
@@ -740,13 +731,6 @@ body:not(.lightmode) .ms-dropdown .dropdown-toggle {
     /* Hand-Cursor */
 }
 
-/* 3) Fokus: nur beim echten Fokus den Ring zeigen (deins existiert schon),
-   hier optional nochmal sicherstellen, dass nur :focus greift */
-.ms-dropdown .dropdown-toggle:focus {
-    border-color: #0969da;
-    box-shadow: 0 0 0 3px rgba(9, 105, 218, .3);
-}
-
 /* 4) Im Menü: Alle auswählbaren Einträge mit Hand-Cursor */
 .ms-dropdown .ms-list .form-check,
 .ms-dropdown .ms-list .form-check * {
@@ -878,4 +862,139 @@ body:not(.lightmode) .ms-dropdown .dropdown-toggle {
 .ms-dropdown .ms-list .form-check,
 .ms-dropdown .ms-list .form-check * {
     border-color: transparent !important;
+}
+
+/* --- Immer rotes X statt BS-Ausrufezeichen (auch ohne Fokus) --- */
+.form-control.textbox.is-invalid,
+.textbox.is-invalid {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='%23dc3545' viewBox='0 0 12 12'%3e%3cpath d='M6.707 6l3.647-3.646-.707-.708L6 5.293 2.354 1.646l-.708.708L5.293 6l-3.647 3.646.708.708L6 6.707l3.646 3.647.708-.708L6.707 6z'/%3e%3c/svg%3e") !important;
+    background-repeat: no-repeat !important;
+    background-position: right calc(0.375em + 0.1875rem) center !important;
+    background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem) !important;
+}
+
+.form-control.textbox.is-invalid:focus,
+.textbox.is-invalid:focus {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='%23dc3545' viewBox='0 0 12 12'%3e%3cpath d='M6.707 6l3.647-3.646-.707-.708L6 5.293 2.354 1.646l-.708.708L5.293 6l-3.647 3.646.708.708L6 6.707l3.646 3.647.708-.708L6.707 6z'/%3e%3c/svg%3e") !important;
+}
+
+/* --- Dünner grüner Haken (immer gleich, auch bei Fokus) --- */
+.form-control.textbox.is-valid,
+.textbox.is-valid {
+    border-color: #198754;
+    padding-right: 2.25rem;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3e%3cpath d='M2 6l2.5 2.5L10 3.5' stroke='%23198754' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3e%3c/svg%3e") !important;
+    background-repeat: no-repeat;
+    background-position: right calc(0.375em + 0.1875rem) center;
+    background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+}
+
+.form-control.textbox.is-valid:focus,
+.textbox.is-valid:focus {
+    /* identisches (dünnes) Icon – kein Umspringen mehr */
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3e%3cpath d='M2 6l2.5 2.5L10 3.5' stroke='%23198754' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3e%3c/svg%3e") !important;
+}
+
+/* --- Validierungsstyles in Dropdowns/Checkboxlisten neutralisieren --- */
+
+/* Borders/Icons neutralisieren */
+.was-validated .ms-dropdown .form-check-input:valid,
+.was-validated .ms-dropdown .form-check-input:invalid,
+.ms-dropdown .form-check-input.is-valid,
+.ms-dropdown .form-check-input.is-invalid {
+    border-color: var(--gh-border, var(--border-color)) !important;
+    box-shadow: none !important;
+    background-image: none !important;
+    /* kein grüner/roter Icon */
+}
+
+/* Label-Farbe neutral halten (nicht grün/rot einfärben) */
+.was-validated #tests-list .form-check-input:valid~.form-check-label,
+.was-validated #tests-list .form-check-input:invalid~.form-check-label,
+#tests-list .form-check-input.is-valid~.form-check-label,
+#tests-list .form-check-input.is-invalid~.form-check-label,
+.was-validated .ms-dropdown .form-check-input:valid~.form-check-label,
+.was-validated .ms-dropdown .form-check-input:invalid~.form-check-label,
+.ms-dropdown .form-check-input.is-valid~.form-check-label,
+.ms-dropdown .form-check-input.is-invalid~.form-check-label {
+    color: var(--text-color) !important;
+}
+
+/* Für Sicherheit: Fokus/Outline in den Menüs dezent lassen */
+.was-validated .ms-dropdown .form-check-input:focus,
+.was-validated #tests-list .form-check-input:focus {
+    box-shadow: 0 0 0 3px rgba(9, 105, 218, .0) !important;
+    /* kein extra Ring */
+}
+
+/* ==== Einheitliches Fokus-Verhalten (immer blau) ==== */
+.form-control.textbox:focus,
+.textbox:focus {
+    border-color: #0969da !important;
+    box-shadow: 0 0 0 1px #0969da !important;
+    background-color: var(--base-color) !important;
+    /* Dark-Mode-Consistency */
+    color: var(--text-color) !important;
+}
+
+/* Bootstrap-Validierungs-Glows auf Fokus neutralisieren */
+.was-validated .form-control:valid:focus,
+.form-control.is-valid:focus,
+.was-validated .form-control:invalid:focus,
+.form-control.is-invalid:focus {
+    border-color: #0969da !important;
+    box-shadow: 0 0 0 1px #0969da !important;
+    /* kein grüner/roter Glow */
+}
+
+/* Optional: auch im nicht-fokussierten Zustand keinen extra Glow */
+.was-validated .form-control:valid,
+.form-control.is-valid,
+.was-validated .form-control:invalid,
+.form-control.is-invalid {
+    box-shadow: none !important;
+}
+
+/* ==== Dark-Mode Anpassungen für Inputs & Prefix "Min % / Max %" ==== */
+body:not(.lightmode) .form-control.textbox {
+    background-color: var(--base-color) !important;
+    color: var(--text-color) !important;
+    border-color: var(--border-color) !important;
+}
+
+body:not(.lightmode) .form-control.textbox::placeholder {
+    color: rgba(224, 224, 224, .7);
+}
+
+/* Input-Group Label (Prefix) angleichen */
+body:not(.lightmode) .input-group-text {
+    background-color: var(--base-color) !important;
+    color: var(--text-color) !important;
+    border-color: var(--border-color) !important;
+}
+
+/* Lightmode Pendant für Konsistenz */
+.lightmode .input-group-text {
+    background-color: var(--base-color) !important;
+    color: var(--text-color) !important;
+    border-color: var(--border-color) !important;
+}
+
+/* (Optional) Nummernspinner im Darkmode angenehmer darstellen */
+body:not(.lightmode) input[type="number"].textbox::-webkit-outer-spin-button,
+body:not(.lightmode) input[type="number"].textbox::-webkit-inner-spin-button {
+    filter: invert(1) brightness(0.9);
+}
+
+.ms-dropdown .dropdown-toggle,
+.ms-dropdown .dropdown-toggle:hover,
+.ms-dropdown .dropdown-toggle:focus,
+.ms-dropdown .dropdown-toggle:active,
+.ms-dropdown .dropdown-toggle.show,
+.ms-dropdown .dropdown-toggle:focus-visible {
+    border-color: var(--border-color) !important;
+    box-shadow: none !important;
+    outline: none !important;
+    background-color: inherit !important;
+    /* keine Farbwechsel */
 }
