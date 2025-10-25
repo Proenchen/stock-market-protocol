@@ -53,6 +53,7 @@ class Analysis:
         crsp_full = pd.read_csv("./data/dsws_crsp.csv")
         factors_full = pd.read_csv("./data/Factors.csv")
         fm_full = pd.read_csv("./data/Fama_Macbeth.csv")
+        corr_full = pd.read_parquet("./data/Predictor_different.parquet", engine='fastparquet')
 
         if country_filter:
             crsp_full["country"] = crsp_full["country"].astype(str).str.strip()
@@ -75,6 +76,8 @@ class Analysis:
             q_hi_crsp = crsp_full["size_lag"].astype(float).quantile(max_pct/100) if "size_lag" in crsp_full.columns else None
             q_lo_fm   = fm_full["size_lag"].astype(float).quantile(min_pct/100) if "size_lag" in fm_full.columns else None
             q_hi_fm   = fm_full["size_lag"].astype(float).quantile(max_pct/100) if "size_lag" in fm_full.columns else None
+            q_lo_corr   = corr_full["size_lag"].astype(float).quantile(min_pct/100) if "size_lag" in corr_full.columns else None
+            q_hi_corr   = corr_full["size_lag"].astype(float).quantile(max_pct/100) if "size_lag" in corr_full.columns else None
 
             def _between(df_, col, lo, hi):
                 if lo is None or hi is None or col not in df_.columns:
@@ -84,8 +87,9 @@ class Analysis:
 
             crsp_full = _between(crsp_full, "size_lag", q_lo_crsp, q_hi_crsp)
             fm_full   = _between(fm_full,   "size_lag", q_lo_fm,   q_hi_fm)
+            corr_full = _between(corr_full,   "size_lag", q_lo_corr,   q_hi_corr)
 
-        ctx = SharedContext(crsp=crsp_full, factors=factors_full, fm=fm_full)
+        ctx = SharedContext(crsp=crsp_full, factors=factors_full, fm=fm_full, correlation_data= corr_full)
         plugins = Registry.discover_selected_analyzers(selected_analyzers)
 
         # --- Analyzer auto-discovery & execution ---

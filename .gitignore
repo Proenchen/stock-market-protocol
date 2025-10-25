@@ -175,4 +175,5 @@ cython_debug/
 
 .vscode
 data/*.csv
+data/*.parquet
 .env

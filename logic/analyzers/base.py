@@ -23,6 +23,7 @@ class SharedContext:
     crsp: pd.DataFrame
     factors: pd.DataFrame
     fm: pd.DataFrame
+    correlation_data: pd.DataFrame
 
 
 @dataclass
@@ -87,6 +88,7 @@ class BaseAnalyzer(ABC):
         self.crsp = ctx.crsp
         self.factors = ctx.factors
         self.fm = ctx.fm
+        self.corr = ctx.correlation_data
         self.signal_name = signal_name
 
     @abstractmethod
