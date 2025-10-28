@@ -6,7 +6,7 @@ from logic.analyzers.base import BaseAnalyzer
 from logic.analyzers.base import AutoRegistered, AnalyzerOutput
 from logic.utils.formatter import Formatter
 
-class CorrelationAnaylzer(BaseAnalyzer, AutoRegistered):
+class CorrelationAnalyzer(BaseAnalyzer, AutoRegistered):
     ENABLED = True
     ORDER = 50
     TITLE = "Correlation Analysis"
@@ -39,9 +39,6 @@ class CorrelationAnaylzer(BaseAnalyzer, AutoRegistered):
         """
         super().__init__(ctx, df_input, signal_name)
 
-    # --------------------------------------------------------------------- #
-    # Core API
-    # --------------------------------------------------------------------- #
     def analyze(self) -> pd.DataFrame:
         """
         Merged Panel auf (DSCD, Monat) erstellen und Pearson-Korrelationen
@@ -74,14 +71,12 @@ class CorrelationAnaylzer(BaseAnalyzer, AutoRegistered):
     def generate_output(self) -> AnalyzerOutput:
         res = self.analyze()
 
-        # Text-Ausgabe
         lines = [f"Signal: {self.signal_name}", "Factor,Correlation,N"]
         for _, row in res.iterrows():
             corr_str = "nan" if pd.isna(row["corr"]) else f"{row['corr']:.3f}"
             lines.append(f"{row['factor']},{corr_str},{int(row['n_obs'])}")
         txt = "\n".join(lines)
 
-        # LaTeX-Tabelle (mit Escaping!)
         latex_rows = []
         for _, row in res.iterrows():
             factor_escaped = Formatter._latex_escape(str(row["factor"]))
@@ -118,7 +113,6 @@ class CorrelationAnaylzer(BaseAnalyzer, AutoRegistered):
         Normalisiert Datumsangaben auf Monatsende und merged Input-Signal
         mit self.corr auf (DSCD, month).
         """
-        # Eingabe vereinheitlichen: [DSCD, dates, signal]
         sig = self.data.copy()
         sig = sig.rename(
             columns={
@@ -128,19 +122,15 @@ class CorrelationAnaylzer(BaseAnalyzer, AutoRegistered):
             }
         )
 
-        # Datumsverarbeitung -> Monatsende
         sig["dates"] = pd.to_datetime(sig["dates"], errors="coerce")
         sig["month"] = sig["dates"].dt.to_period("M").dt.to_timestamp("M")
 
-        # corr: hat DATE + DSCD + Faktor-Spalten
         corr = self.corr.copy()
-        # Defensive: nur relevante Spalten behalten, fehlende ignorieren
         keep_cols = ["DSCD", "DATE"] + [c for c in self.FACTOR_COLS if c in corr.columns]
         corr = corr[keep_cols].copy()
         corr["DATE"] = pd.to_datetime(corr["DATE"], errors="coerce")
         corr["month"] = corr["DATE"].dt.to_period("M").dt.to_timestamp("M")
 
-        # Merge auf (DSCD, month)
         merged = pd.merge(
             sig[["DSCD", "month", "signal"]],
             corr.drop(columns=["DATE"]),
@@ -148,7 +138,6 @@ class CorrelationAnaylzer(BaseAnalyzer, AutoRegistered):
             how="inner",
         )
 
-        # Numerische Typen sicherstellen
         merged["signal"] = pd.to_numeric(merged["signal"], errors="coerce")
         for f in self.FACTOR_COLS:
             if f in merged.columns:

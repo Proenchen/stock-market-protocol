@@ -129,11 +129,9 @@ def upload() -> str:
         })
     analyzers.sort(key=lambda a: a["order"])
 
-    # NEU: Länder & Industrien für die Dropdowns
     countries, industries = _read_crsp_uniques()
     return render_template('upload.html', analyzers=analyzers, countries=countries, industries=industries)
 
-# app.py (Ausschnitt)
 
 @app.route('/upload_excel', methods=['POST'])
 def upload_excel() -> str:
