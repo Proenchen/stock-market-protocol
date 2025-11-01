@@ -87,7 +87,6 @@ class CorrelationAnalyzer(BaseAnalyzer, AutoRegistered):
         latex = (
             "\\begin{table}[ht]\n"
             "\\centering\n"
-            f"\\caption{{{caption}}}\n"
             "\\begin{tabular}{lrr}\n"
             "\\toprule\n"
             "Factor & Correlation & N \\\\\n"
@@ -95,6 +94,7 @@ class CorrelationAnalyzer(BaseAnalyzer, AutoRegistered):
             + "\n".join(latex_rows) + "\n"
             "\\bottomrule\n"
             "\\end{tabular}\n"
+            f"\\caption{{{caption}}}\n"
             "\\end{table}\n"
         )
 
