@@ -6,6 +6,7 @@ from logic.analyzers.base import BaseAnalyzer
 from logic.analyzers.base import AutoRegistered, AnalyzerOutput
 from logic.utils.formatter import Formatter
 
+
 class CorrelationAnalyzer(BaseAnalyzer, AutoRegistered):
     ENABLED = True
     ORDER = 50
@@ -31,65 +32,80 @@ class CorrelationAnalyzer(BaseAnalyzer, AutoRegistered):
         Parameters
         ----------
         ctx
-            Shared context with CRSP/factors/FM plus correlation_data (self.corr).
+            Shared analysis context that includes CRSP/factor/FM data and
+            correlation data (self.corr).
         df_input : pd.DataFrame
-            Erwartet mind. drei Spalten in der Reihenfolge [DSCD/permno, dates, signal].
+            Expected to have at least three columns in the order:
+            [DSCD/permno, dates, signal].
         signal_name : str
-            Anzeigename des Signals.
+            Display name of the signal.
         """
         super().__init__(ctx, df_input, signal_name)
 
     def analyze(self) -> pd.DataFrame:
         """
-        Merged Panel auf (DSCD, Monat) erstellen und Pearson-Korrelationen
-        zwischen `signal` und jedem Faktor in FACTOR_COLS berechnen.
+        For each DSCD, compute the Pearson correlation between `signal` and
+        each factor (over all months), then take the unweighted mean of
+        correlations across DSCDs per factor.
 
         Returns
         -------
-        pd.DataFrame mit Spalten: ['factor', 'corr', 'n_obs'] sortiert nach |corr|.
+        pd.DataFrame with columns: ['factor', 'corr'],
+        sorted by absolute correlation (|corr|).
         """
         df = self._prep_merged()
-
         out = []
+
         for f in self.FACTOR_COLS:
             if f not in df.columns:
-                out.append((f, np.nan, 0))
+                out.append((f, np.nan))
                 continue
 
-            sub = df[["signal", f]].dropna()
-            n = int(len(sub))
-            if n == 0:
-                rho = np.nan
-            else:
-                rho = float(sub["signal"].corr(sub[f]))
-            out.append((f, rho, n))
+            rhos = []
+            for _, g in df[['DSCD', 'signal', f]].dropna().groupby('DSCD', sort=False):
+                if len(g) >= 2:
+                    sig_std = g['signal'].std()
+                    fac_std = g[f].std()
+                    if sig_std > 0 and fac_std > 0:
+                        r = float(g['signal'].corr(g[f]))
+                        if not np.isnan(r):
+                            rhos.append(r)
 
-        res = pd.DataFrame(out, columns=["factor", "corr", "n_obs"])
-        res = res.iloc[res["corr"].abs().sort_values(ascending=False).index].reset_index(drop=True)
+            mean_rho = float(np.mean(rhos)) if len(rhos) > 0 else np.nan
+            out.append((f, mean_rho))
+
+        res = pd.DataFrame(out, columns=['factor', 'corr'])
+        res = res.iloc[res['corr'].abs().sort_values(ascending=False).index].reset_index(drop=True)
         return res
 
     def generate_output(self) -> AnalyzerOutput:
+        """
+        Generates both text and LaTeX representations of the correlation
+        analysis results.
+        """
         res = self.analyze()
 
-        lines = [f"Signal: {self.signal_name}", "Factor,Correlation,N"]
+        # Plain text / CSV-style summary
+        lines = [f"Signal: {self.signal_name}", "Factor,Correlation"]
         for _, row in res.iterrows():
             corr_str = "nan" if pd.isna(row["corr"]) else f"{row['corr']:.3f}"
-            lines.append(f"{row['factor']},{corr_str},{int(row['n_obs'])}")
+            lines.append(f"{row['factor']},{corr_str}")
         txt = "\n".join(lines)
 
+        # LaTeX table (2 columns)
         latex_rows = []
         for _, row in res.iterrows():
             factor_escaped = Formatter._latex_escape(str(row["factor"]))
             corr_str = "---" if pd.isna(row["corr"]) else f"{row['corr']:.3f}"
-            latex_rows.append(f"{factor_escaped} & {corr_str} & {int(row['n_obs'])} \\\\")
+            latex_rows.append(f"{factor_escaped} & {corr_str} \\\\")
 
         caption = f"Correlation between {Formatter._latex_escape(self.signal_name)} and factor proxies"
         latex = (
             "\\begin{table}[ht]\n"
             "\\centering\n"
-            "\\begin{tabular}{lrr}\n"
+            "\\begin{tabular}{lr}\n"
             "\\toprule\n"
-            "Factor & Correlation & N \\\\\n"
+            "Factor & Correlation \\\\\n"
             "\\midrule\n"
             + "\n".join(latex_rows) + "\n"
             "\\bottomrule\n"
@@ -110,13 +126,13 @@ class CorrelationAnalyzer(BaseAnalyzer, AutoRegistered):
     # --------------------------------------------------------------------- #
     def _prep_merged(self) -> pd.DataFrame:
         """
-        Normalisiert Datumsangaben auf Monatsende und merged Input-Signal
-        mit self.corr auf (DSCD, month).
+        Normalize date information to month-end and merge the input signal
+        with `self.corr` on (DSCD, month).
         """
         sig = self.data.copy()
         sig = sig.rename(
             columns={
-                sig.columns[0]: "DSCD",   
+                sig.columns[0]: "DSCD",
                 sig.columns[1]: "dates",
                 sig.columns[2]: "signal",
             }
