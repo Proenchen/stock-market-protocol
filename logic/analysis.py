@@ -89,7 +89,7 @@ class Analysis:
             fm_full   = _between(fm_full,   "size_lag", q_lo_fm,   q_hi_fm)
             corr_full = _between(corr_full,   "size_lag", q_lo_corr,   q_hi_corr)
 
-        ctx = SharedContext(crsp=crsp_full, factors=factors_full, fm=fm_full, correlation_data= corr_full)
+        ctx = SharedContext(crsp=crsp_full, factors=factors_full, fm=fm_full, correlation_data=corr_full)
         plugins = Registry.discover_selected_analyzers(selected_analyzers)
 
         # --- Analyzer auto-discovery & execution ---
