@@ -1,6 +1,6 @@
 # 📈 Stock Market Protocol
 
-A framework for analyzing stock return predictors on global market data.
+A framework for analyzing and evaluating stock return predictors on global market data. A detailed documentation of this project can be found here: [Global Stock Market Protocol Documentation](docs/Documentation.pdf)
 
 ---
 
