@@ -29,7 +29,7 @@
                         <ul class="dropdown-menu">
                             <li><a class="dropdown-item" href="/overview">Overview</a></li>
                             <li><a class="dropdown-item" href="/setup">Setup</a></li>
-                            <li><a class="dropdown-item" href="/usage">Usage</a></li>
+                            <li><a class="dropdown-item" href="/usage">Extension</a></li>
                         </ul>
                     </li>
                     <li class="nav-item"><a class="nav-link" href="/contact">Contact</a></li>
@@ -56,29 +56,24 @@
         <h1>About</h1>
         <p>Welcome to the Global Stock Market project page!</p>
         <p>
-            Researchers have identified over 500 different characteristics that influence the stock market
-            performance of companies. These anomalies often generate significant returns when used to
-            construct a portfolio strategy. However, the replicability and future performance of these
-            strategies still remain as open questions. While the initial results appear promising, there are
-            ongoing concerns about whether these strategies can continue to perform well over time,
-            especially in different market conditions. Many authors have proposed frameworks to address
-            these issues, aiming to make the results more robust and reliable. These frameworks typically
-            focus on improving the testing and validation processes to ensure that the strategies remain
-            effective. However, most studies and proposed frameworks have primarily focused on the U.S. market,
-            neglecting the significant role of other global markets. These markets may have distinct dynamics and
-            behaviors that can influence the effectiveness of portfolio strategies.
+            The study of market anomalies has revealed numerous firm characteristics that systematically predict future 
+            stock performances. While many of these anomalies generate significant excess returns in empirical tests, 
+            their reproducibility and persistence across markets remain uncertain. Existing frameworks for anomaly 
+            validation have largely focused on U.S. equities, overlooking potential differences in international 
+            financial environments. 
         </p>
         <p style="margin-bottom: 30px;">
-            This project introduces user-friendly tools to analyze and interpret newly
-            proposed factors that predict cross-sectional equity returns for global markets.
-            It allows users to test proposed new return predictors by simply uploading a .csv file.
-            After applying the protocol, the system emails the user a self-contained report that
-            describes the results.
+            To address this limitation, we introduce an open-access platform designed to replicate and 
+            evaluate stock market anomalies in a global context. The tool enables users to upload custom predictive 
+            signals and automatically conducts a range of established asset pricing tests. 
+            The framework is equipped with an integrated web interface that generates complete LaTeX reports as 
+            analysis results. Due to its highly modular design, the tool can be easily extended to incorporate 
+            additional models, tests, or data sources, making it a flexible foundation for future empirical asset 
+            pricing research.
         </p>
 
-        <div class="d-flex align-items-center">
-            <p class="mb-1" style="margin-right: 15px;"><strong>Upload your dataset to analyze stock market
-                    factors:</strong></p>
+        <div class="d-flex align-items-center mt-5">
+            <p class="mb-1" style="margin-right: 15px;"><strong>Upload your dataset to analyze your stock return predictor:</strong></p>
             <a href="/upload">
                 <button class="btn btn-primary">Upload CSV</button>
             </a>

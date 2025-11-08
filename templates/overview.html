@@ -28,7 +28,7 @@
                         <ul class="dropdown-menu">
                             <li><a class="dropdown-item" href="/overview">Overview</a></li>
                             <li><a class="dropdown-item" href="/setup">Setup</a></li>
-                            <li><a class="dropdown-item" href="/usage">Usage</a></li>
+                            <li><a class="dropdown-item" href="/usage">Extension</a></li>
                         </ul>
                     </li>
                     <li class="nav-item"><a class="nav-link" href="/contact">Contact</a></li>
@@ -51,14 +51,67 @@
         </div>
     </nav>
 
-    <div class="container">
-        <h1>Overview</h1>
-        <p>Insert UI elements for overview.</p>
+    <div class="container my-5">
+        <h1 class="mb-4">Architecture</h1>
+        <p>The architecture of our framework follows a layered design that separates concerns between data storage,
+            protocol handling, backend logic, and user interaction. The dependencies between the layers are strictly
+            from top to bottom, which facilitates maintainability and extensibility. The main layers can be summarized as follows:</p>
+        <ul>
+            <li><strong>Data Layer:</strong> Responsible for storing market data. It contains all the data required to
+                perform the portfolio tests, including CRSP data, factor data, and a specific dataset for the
+                Fama–MacBeth analysis.</li>
+
+            <li><strong>Protocol Layer:</strong> Encapsulates the core functionality of the stock market protocol. This
+                layer defines the protocols for testing the given anomaly, such as the implementation of factor models
+                or the Fama-Macbeth regression. By strictly separating protocol logic from other parts of the system,
+                the framework ensures that it can evolve independently of presentation concerns.</li>
+
+            <li><strong>Application Layer:</strong> Implements the main logic of the system, including data validation
+                and orchestration of protocol operations. This layer acts as the central mediator between the data and
+                protocol layers, ensuring that input is transformed into meaningful output while maintaining system
+                integrity.</li>
+
+            <li><strong>Interface Layer:</strong> Provides access points for end-users and external applications. On the
+                server side, a lightweight Flask application exposes REST-like endpoints. On the client side, a web
+                frontend built with HTML, CSS, and Bootstrap ensures usability and responsiveness across devices.</li>
+        </ul>
+
+        <div class="text-center my-5">
+            <img src="{{ url_for('static', filename='images/class_diagram.png') }}" class="img-fluid"
+                alt="Class Diagram">
+        </div>
+
+        <p>The class diagram illustrates the separation of responsibilities between core protocol classes, utility
+            modules, and interface components. The <code>data</code> package represents the data layer, providing all
+            required market data. The <code>analyzers</code> package embodies the protocol layer, containing the concrete
+            implementations of anomaly analysis methods. All analyzers inherit from <code>BaseAnalyzer</code>, which
+            defines the main analysis methods and output generation logic.</p>
+
+        <p>We adopted a service discovery pattern to enable automatic detection of both existing and newly added
+            analyzers. This pattern facilitates dynamic identification of system components without manual configuration.
+            Within our framework, any newly implemented analyzer inheriting from <code>AutoRegistry</code> is
+            automatically discovered and integrated into the analysis pipeline.</p>
+
+        <p>The <code>Analysis</code> class forms the application layer. It retrieves enabled analyzers, executes them in
+            order, collects results, and uses the <code>Composer</code> class to generate the final LaTeX document. The
+            <code>App</code> class then delivers this result to the user via email and manages user file uploads.</p>
+
+        <p>The frontend, implemented using HTML, CSS, and Bootstrap, serves as the interface layer. It communicates with
+            Flask-based REST endpoints (via <code>GET</code> and <code>POST</code> requests) to send input files and
+            retrieve analysis results.</p>
+
+        <p>The complete analysis workflow is illustrated by the following activity diagram:</p>
+
+        <div class="text-center my-5">
+            <img src="{{ url_for('static', filename='images/activity.png') }}" class="img-fluid"
+                alt="Activity Diagram">
+        </div>
     </div>
 
-    <div class="footer">
+    <footer class="footer">
         <p>&copy; 2025 Global Stock Market Protocol by Julian Shen and Jiexuan Gao</p>
-    </div>
+    </footer>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 

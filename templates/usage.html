@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="{{ url_for('static', filename='js/common.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/copy.js') }}"></script>
 </head>
 
 <body>
@@ -28,7 +29,7 @@
                         <ul class="dropdown-menu">
                             <li><a class="dropdown-item" href="/overview">Overview</a></li>
                             <li><a class="dropdown-item" href="/setup">Setup</a></li>
-                            <li><a class="dropdown-item" href="/usage">Usage</a></li>
+                            <li><a class="dropdown-item" href="/usage">Extension</a></li>
                         </ul>
                     </li>
                     <li class="nav-item"><a class="nav-link" href="/contact">Contact</a></li>
@@ -52,13 +53,127 @@
     </nav>
 
     <div class="container">
-        <h1>Usage</h1>
-        <p>Insert UI elements for usage.</p>
+        <h1>Guide for extending our code base</h1>
+
+        <ol class="list-group list-group-unnumbered">
+
+            <!-- 1. Guide intro -->
+            <li class="list-group-item border-0 px-0">
+                <h5 class="fw-semibold mb-2">1. Add new analyzer class</h5>
+                <p class="mb-2">
+                    Due to the service discovery pattern, integrating new portfolio tests is
+                    straightforward.
+                    Implement a new analyzer by inheriting from <code>BaseAnalyzer</code> and
+                    <code>AutoRegistered</code>,
+                    then implement the abstract methods <code>analyze()</code> and <code>generate_output()</code>.
+                    Don’t forget to provide the class constants <code>ENABLED</code>, <code>ORDER</code>, and
+                    <code>TITLE</code>.
+                </p>
+                <div class="position-relative">
+                    <pre class="bg-dark text-light p-3 rounded mt-3"><code>from logic.analyzers.base import BaseAnalyzer
+from logic.analyzers.base import AutoRegistered, AnalyzerOutput
+
+class NewAnalyzer(BaseAnalyzer, AutoRegistered):
+    ENABLED = True
+    ORDER = 10
+    TITLE = "&lt;Title in result document for this analyzer&gt;"
+
+    def __init__(self, ctx, df_input, signal_name):
+        super().__init__(ctx, df_input, signal_name)
+
+    def analyze(self):
+        # Your test logic...
+
+    def generate_output(self) -> AnalyzerOutput:
+        # Use the result of analyze() to generate the LaTeX blocks and/or string output...
+</code></pre>
+                </div>
+                <p class="mt-2">
+                    If you run the analysis, this class will be automatically discovered and
+                    <code>generate_output()</code> will be executed automatically.
+                </p>
+            </li>
+
+            <!-- 2. Extend datasets -->
+            <li class="list-group-item border-0 px-0">
+                <h5 class="fw-semibold mb-2">2. Extend datasets</h5>
+                <p class="mb-2">
+                    To add datasets for analysis, place your <code>.csv</code> files in the
+                    <code>data</code> package and extend the <code>SharedContext</code> dataclass:
+                </p>
+                <div class="position-relative">
+                    <pre class="bg-dark text-light p-3 rounded mt-3"><code>from dataclasses import dataclass
+import pandas as pd
+
+@dataclass
+class SharedContext:
+    crsp: pd.DataFrame
+    factors: pd.DataFrame
+    fm: pd.DataFrame
+    correlation_data: pd.DataFrame
+    new_data: pd.DataFrame  # NEW
+</code></pre>
+                </div>
+                <p class="mt-3">Add paths to the new datasets in the <code>Analysis</code> class:</p>
+                <div class="position-relative">
+                    <pre class="bg-dark text-light p-3 rounded mt-3"><code>import pandas as pd
+
+class Analysis:
+    @staticmethod
+    def run_complete_analysis(df: pd.DataFrame, signal_name: str) -> str:
+        crsp_full = pd.read_csv("./data/dsws_crsp.csv")
+        factors_full = pd.read_csv("./data/Factors.csv")
+        fm_full = pd.read_csv("./data/Fama_Macbeth.csv")
+        corr_full = pd.read_parquet("./data/Predictor_different.parquet")
+        new_data = pd.read_csv("./data/New_Data.csv")  # NEW
+
+        ctx = SharedContext(
+            crsp=crsp_full,
+            factors=factors_full,
+            fm=fm_full,
+            correlation_data=corr_full,
+            new_data=new_data
+        )
+</code></pre>
+                </div>
+            </li>
+
+            <!-- 3. Wire new data in BaseAnalyzer -->
+            <li class="list-group-item border-0 px-0">
+                <h5 class="fw-semibold mb-2">3. Wire new data into <code>BaseAnalyzer</code></h5>
+                <p class="mb-2">
+                    Make sure your base class exposes the new dataset to analyzers:
+                </p>
+                <div class="position-relative">
+                    <pre class="bg-dark text-light p-3 rounded mt-3"><code>from abc import ABC
+
+class BaseAnalyzer(ABC):
+    ENABLED: bool
+    ORDER: int
+    TITLE: str
+
+    def __init__(self, ctx, df_input, signal_name) -&gt; None:
+        self.data = df_input
+        self.crsp = ctx.crsp
+        self.factors = ctx.factors
+        self.fm = ctx.fm
+        self.corr = ctx.correlation_data
+        self.new_data = ctx.new_data  # NEW
+        self.signal_name = signal_name
+</code></pre>
+                </div>
+                <p class="mt-2">
+                    <strong>Tip:</strong> Check existing analyzers for patterns and utility methods you can reuse.
+                </p>
+            </li>
+
+        </ol>
     </div>
 
     <div class="footer">
         <p>&copy; 2025 Global Stock Market Protocol by Julian Shen and Jiexuan Gao</p>
     </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 

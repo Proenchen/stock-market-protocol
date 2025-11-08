@@ -11,6 +11,7 @@ from logic.analysis import Analysis
 from logic.compose.registry import Registry
 
 import traceback
+from functools import lru_cache 
 
 app: Flask = Flask(__name__)
 
@@ -115,9 +116,9 @@ def contact() -> str:
 def navbar() -> str:
     return render_template('navbar.html')
 
-@app.route('/upload')
-def upload() -> str:
-    # Analyzer-Liste (wie bei dir)
+
+@lru_cache(maxsize=1)
+def _list_analyzers_cached():
     analyzers = []
     for cls in Registry.list_all_analyzers():
         analyzers.append({
@@ -128,8 +129,30 @@ def upload() -> str:
             "enabled": bool(getattr(cls, "ENABLED", False)),
         })
     analyzers.sort(key=lambda a: a["order"])
+    return analyzers
 
-    countries, industries = _read_crsp_uniques()
+
+@lru_cache(maxsize=1)
+def _read_crsp_uniques_cached():
+    crsp_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "dsws_crsp.csv")
+    df = pd.read_csv(crsp_path, usecols=["country", "ff12"])
+    df["country"] = df["country"].astype(str).str.strip()
+    country_codes = sorted({c.lower() for c in df["country"].dropna().unique()})
+    countries = []
+    for code in country_codes:
+        name = ISO_TO_NAME.get(code, code)
+        countries.append({"code": code, "name": name})
+    countries.sort(key=lambda x: x["name"])
+    ff = pd.to_numeric(df["ff12"], errors="coerce").dropna().astype(int).unique().tolist()
+    ff = sorted([f for f in ff if 1 <= f <= 12])
+    industries = [{"code": f, "name": FF12_LABELS.get(f, f"FF12 {f}")} for f in ff]
+    return countries, industries
+
+
+@app.route('/upload')
+def upload() -> str:
+    analyzers = _list_analyzers_cached()
+    countries, industries = _read_crsp_uniques_cached()
     return render_template('upload.html', analyzers=analyzers, countries=countries, industries=industries)
 
 
@@ -157,39 +180,9 @@ def upload_excel() -> str:
                         min_pct, max_pct))
         return render_template('success.html')
 
-    analyzers = []
-    for cls in Registry.list_all_analyzers():
-        analyzers.append({
-            "fullname": f"{cls.__module__}.{cls.__name__}",
-            "cls_name": cls.__name__,
-            "title": getattr(cls, "TITLE", None),
-            "order": getattr(cls, "ORDER", 100),
-            "enabled": bool(getattr(cls, "ENABLED", False)),
-        })
-    analyzers.sort(key=lambda a: a["order"])
-    countries, industries = _read_crsp_uniques()
+    analyzers = _list_analyzers_cached()
+    countries, industries = _read_crsp_uniques_cached()
     return render_template('upload.html', analyzers=analyzers, countries=countries, industries=industries, result="No file uploaded.")
-
-
-
-def _read_crsp_uniques():
-    """Einmalig die verfügbaren Länder/FF12 aus der CSV lesen."""
-    crsp_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "dsws_crsp.csv")
-    df = pd.read_csv(crsp_path, usecols=["country", "ff12"])
-    # Länder
-    df["country"] = df["country"].astype(str).str.strip()
-    country_codes = sorted({c.lower() for c in df["country"].dropna().unique()})
-    countries = []
-    for code in country_codes:
-        name = ISO_TO_NAME.get(code, code) 
-        countries.append({"code": code, "name": name})
-    countries.sort(key=lambda x: x["name"])
-
-    # FF12
-    ff = pd.to_numeric(df["ff12"], errors="coerce").dropna().astype(int).unique().tolist()
-    ff = sorted([f for f in ff if 1 <= f <= 12])
-    industries = [{"code": f, "name": FF12_LABELS.get(f, f"FF12 {f}")} for f in ff]
-    return countries, industries
 
 
 if __name__ == "__main__":

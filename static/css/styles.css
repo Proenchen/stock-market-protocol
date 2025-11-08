@@ -28,6 +28,19 @@ body {
     margin-bottom: 80px;
 }
 
+.container ul {
+    margin-left: 1.2rem;
+    padding-left: 1.2rem;
+    font-size: 1.1rem;
+    font-weight: 350;
+}
+
+.container ul li {
+    line-height: 1.6;
+    margin-bottom: 0.5rem;
+}
+
+
 .btn-primary {
     background-color: var(--accent-color) !important;
     color: var(--button-text-color) !important;
@@ -997,4 +1010,164 @@ body:not(.lightmode) input[type="number"].textbox::-webkit-inner-spin-button {
     outline: none !important;
     background-color: inherit !important;
     /* keine Farbwechsel */
+}
+
+/* =========================
+   Code blocks (IDMOD-like) – Dark/Light compatible
+   ========================= */
+
+/* Base (Dark mode by default using your variables) */
+.container pre {
+    position: relative;
+    background: var(--base-variant) !important;
+    /* override any .bg-dark */
+    color: var(--text-color) !important;
+    /* override .text-light */
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 14px 16px !important;
+    /* override .p-3 */
+    overflow: auto;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 0.92rem;
+    line-height: 1.55;
+    margin-bottom: 1rem;
+}
+
+.container pre code {
+    background: transparent !important;
+    color: inherit !important;
+    white-space: pre;
+}
+
+/* Copy button – dark mode by default */
+.copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 12px;
+    line-height: 1;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: var(--base-variant);
+    color: var(--text-color);
+    cursor: pointer;
+}
+
+.copy-btn:hover {
+    filter: brightness(1.06);
+}
+
+.copy-btn.copied {
+    border-color: #2da44e;
+    background: #0f2017;
+    color: #7ee2a8;
+}
+
+.lightmode .container pre {
+    background: #f6f8fa !important;
+    color: #24292f !important;
+    border-color: #d0d7de;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.02);
+}
+
+.lightmode .copy-btn {
+    background: #f6f8fa;
+    color: #24292f;
+    border-color: #d0d7de;
+}
+
+.lightmode .copy-btn:hover {
+    background: #eef1f4;
+}
+
+.lightmode .copy-btn.copied {
+    border-color: #2da44e;
+    background: #e9f7ef;
+    color: #1a7f37;
+}
+
+/* ===== Dark mode compatibility patch (no lightmode changes) ===== */
+
+/* List groups (Bootstrap defaults are light; override only in dark mode) */
+body:not(.lightmode) .list-group,
+body:not(.lightmode) .list-group-item {
+  background-color: var(--base-color) !important;
+  color: var(--text-color) !important;
+  border-color: var(--border-color) !important;
+}
+body:not(.lightmode) .list-group-item + .list-group-item {
+  border-top-color: var(--border-color) !important;
+}
+
+/* Headings inside list items */
+body:not(.lightmode) .list-group-item h5,
+body:not(.lightmode) .list-group-item p {
+  color: var(--text-color) !important;
+}
+
+/* Links (keep accessible contrast in dark; lightmode remains unchanged) */
+body:not(.lightmode) a {
+  color: #66a6ff;                /* subtle blue on dark */
+  text-decoration-color: rgba(102, 166, 255, 0.5);
+}
+body:not(.lightmode) a:hover,
+body:not(.lightmode) a:focus {
+  color: #9bc1ff;
+  text-decoration-color: rgba(155, 193, 255, 0.8);
+}
+
+/* List markers for <ol>/<ul> in container (so bullets/numbers aren’t too dim) */
+body:not(.lightmode) .container ol,
+body:not(.lightmode) .container ul {
+  color: var(--text-color) !important;
+}
+body:not(.lightmode) .container ol li::marker {
+  color: var(--text-color);
+}
+
+/* Bootstrap card/list-group bleed fixes inside dark containers */
+body:not(.lightmode) .list-group-item.border-0 {
+  border-color: transparent !important;
+}
+
+/* Code blocks already themed, but make sure utility classes don’t leak */
+body:not(.lightmode) pre.bg-dark,
+body:not(.lightmode) code.bg-dark {
+  background-color: var(--base-variant) !important;
+  color: var(--text-color) !important;
+}
+
+/* Buttons that might inherit Bootstrap defaults in dark */
+body:not(.lightmode) .btn {
+  color: var(--button-text-color);
+  border-color: var(--border-color);
+}
+body:not(.lightmode) .btn:focus-visible {
+  box-shadow: 0 0 0 3px rgba(9,105,218,.35) !important;
+}
+
+/* Navbar link active/hover edge cases */
+body:not(.lightmode) .navbar .nav-link,
+body:not(.lightmode) .navbar .navbar-brand {
+  color: var(--text-color) !important;
+}
+body:not(.lightmode) .navbar .nav-link:hover {
+  color: rgba(224,224,224,.85) !important;
+}
+
+/* Dropdown item hover contrast tweak (keeps your bg rules) */
+body:not(.lightmode) .dropdown-item:hover,
+body:not(.lightmode) .dropdown-item:focus {
+  background-color: var(--base-variant) !important;
+  color: var(--text-color) !important;
+}
+
+/* Horizontal rules created by borders in components */
+body:not(.lightmode) .border,
+body:not(.lightmode) .border-top,
+body:not(.lightmode) .border-bottom {
+  border-color: var(--border-color) !important;
 }
