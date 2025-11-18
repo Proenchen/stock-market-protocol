@@ -546,7 +546,6 @@ Light-Mode properties
 }
 
 
-/* Multi-Select Dropdown (Dark/Light kompatibel) */
 .ms-dropdown .dropdown-menu.ms-menu {
     max-height: 320px;
     overflow: auto;
@@ -563,7 +562,6 @@ Light-Mode properties
 
 .ms-dropdown .form-check-input {
     margin-top: 0;
-    /* schöner vertikal mittig */
 }
 
 .ms-dropdown .form-check-label {
@@ -585,12 +583,6 @@ Light-Mode properties
     background-color: var(--base-color);
 }
 
-/* =========================
-   GitHub-like Select Menu
-   für .ms-dropdown
-   ========================= */
-
-/* Button wie GitHub-Select */
 .ms-dropdown .dropdown-toggle {
     background: var(--base-color);
     border: 1px solid var(--border-color);
@@ -600,7 +592,6 @@ Light-Mode properties
     line-height: 1.5;
 }
 
-/* Menü-Panel */
 .ms-dropdown .dropdown-menu.ms-menu {
     min-width: 100%;
     border: 1px solid var(--gh-menu-border, var(--border-color));
@@ -610,7 +601,6 @@ Light-Mode properties
     box-shadow: 0 8px 24px rgba(0, 0, 0, .2);
 }
 
-/* Suchzeile und Aktionen */
 .ms-dropdown .ms-search {
     height: 32px;
     border-radius: 6px;
@@ -623,7 +613,6 @@ Light-Mode properties
     line-height: 1.2;
 }
 
-/* Listeneinträge im Menü */
 .ms-dropdown .ms-list {
     margin-top: 6px;
     max-height: 240px;
@@ -634,7 +623,6 @@ Light-Mode properties
 .ms-dropdown .ms-list .form-check {
     position: relative;
     padding: 6px 32px 6px 6px;
-    /* Platz rechts für Checkmark */
     border-radius: 6px;
     margin: 2px 0;
 }
@@ -651,7 +639,6 @@ Light-Mode properties
     color: var(--text-color);
 }
 
-/* Checkmark rechts (wie GitHub) */
 .ms-dropdown .ms-list .form-check .form-check-input+.form-check-label::after {
     content: "";
     position: absolute;
@@ -665,22 +652,18 @@ Light-Mode properties
     background-repeat: no-repeat;
     background-position: center;
     background-size: 16px 16px;
-    /* weißer Haken */
     background-image: url("data:image/svg+xml,%3csvg width='16' height='16' xmlns='http://www.w3.org/2000/svg'%3e%3cpath fill='%23ffffff' d='M6.173 12.727L1.89 8.444l1.06-1.06 3.223 3.222 6.878-6.879 1.06 1.06z'/%3e%3c/svg%3e");
 }
 
-/* eingeblendeter Haken, wenn angehakt */
 .ms-dropdown .ms-list .form-check-input:checked+.form-check-label::after {
     opacity: 1;
 }
 
-/* dezente Trennlinie optional */
 .ms-dropdown .dropdown-divider {
     border-top-color: var(--gh-menu-border, var(--border-color));
     opacity: 1;
 }
 
-/* Scrollbar (dezent) */
 .ms-dropdown .ms-list::-webkit-scrollbar {
     width: 10px;
 }
@@ -696,14 +679,12 @@ Light-Mode properties
     background-clip: content-box;
 }
 
-/* Badge optisch wie GitHub Pill */
 .ms-dropdown .ms-badge {
     background: rgba(110, 118, 129, .4);
     font-weight: 600;
     border-radius: 999px;
 }
 
-/* Light/Dark Feintuning */
 :root {
     --gh-menu-bg: var(--base-variant);
     --gh-menu-border: var(--border-color);
@@ -728,51 +709,38 @@ Light-Mode properties
     display: none !important;
 }
 
-/* 1) Dark Mode: Text der geschlossenen Dropdown-Schaltfläche immer weiß */
 body:not(.lightmode) .ms-dropdown .dropdown-toggle {
     color: var(--text-color) !important;
-    /* bleibt weiß/grau je nach Theme */
 }
 
-/* 2) Hover: Rand NICHT verändern, nur Cursor als Hand */
 .ms-dropdown .dropdown-toggle:hover {
     border-color: var(--border-color) !important;
-    /* unverändert */
     box-shadow: none !important;
-    /* kein zusätzlicher Schatten */
     cursor: pointer;
-    /* Hand-Cursor */
 }
 
-/* 4) Im Menü: Alle auswählbaren Einträge mit Hand-Cursor */
 .ms-dropdown .ms-list .form-check,
 .ms-dropdown .ms-list .form-check * {
     cursor: pointer;
 }
 
-/* 5) Optional – auch die "Select all" / "Clear" Buttons haben Hand-Cursor */
 .ms-dropdown .ms-select-all,
 .ms-dropdown .ms-clear {
     cursor: pointer;
 }
 
-/* 6) Falls Bootstrap dem Button-Text im Light Mode Blau o.ä. gibt, hier neutral halten */
 .lightmode .ms-dropdown .dropdown-toggle {
     color: #24292f;
-    /* GitHub-ähnlich, neutral dunkel */
 }
 
-/* 7) Sicherheitshalber: keine Border-Änderung auf :active/:focus-visible Hover-Kombis */
 .ms-dropdown .dropdown-toggle:hover:active,
 .ms-dropdown .dropdown-toggle:hover:focus-visible {
     border-color: var(--border-color) !important;
     box-shadow: none !important;
 }
 
-/* Einheitlicher GitHub-like Buttonstil für All/Clear (Dark + Light) */
 .ms-dropdown .ms-select-all,
 .ms-dropdown .ms-clear {
-    /* Bootstrap-Styles überstimmen */
     background: transparent !important;
     border: 1px solid var(--ms-btn-border, #30363d) !important;
     color: var(--ms-btn-fg, #c9d1d9) !important;
@@ -785,21 +753,18 @@ body:not(.lightmode) .ms-dropdown .dropdown-toggle {
     transition: background-color .12s ease, border-color .12s ease, box-shadow .12s ease;
 }
 
-/* Hover: nur leicht hinterlegen, keine Randänderung */
 .ms-dropdown .ms-select-all:hover,
 .ms-dropdown .ms-clear:hover {
     background: var(--ms-btn-hover-bg, rgba(110, 118, 129, .2)) !important;
     border-color: var(--ms-btn-border, #30363d) !important;
 }
 
-/* Active */
 .ms-dropdown .ms-select-all:active,
 .ms-dropdown .ms-clear:active {
     background: var(--ms-btn-active-bg, rgba(110, 118, 129, .35)) !important;
     box-shadow: none !important;
 }
 
-/* Fokus-Ring wie bei deinen Inputs */
 .ms-dropdown .ms-select-all:focus,
 .ms-dropdown .ms-clear:focus {
     outline: none !important;
@@ -807,60 +772,43 @@ body:not(.lightmode) .ms-dropdown .dropdown-toggle {
     border-color: #0969da !important;
 }
 
-/* ---------- Darkmode-Defaults (passen zu deinem Theme) ---------- */
 :root {
     --ms-btn-border: #30363d;
-    /* GitHub Dark border */
     --ms-btn-fg: #c9d1d9;
-    /* GitHub Dark text */
     --ms-btn-hover-bg: rgba(110, 118, 129, .2);
     --ms-btn-active-bg: rgba(110, 118, 129, .35);
 }
 
-/* ---------- Lightmode-Overrides: gleiche Anmutung, helle Palette ---------- */
 .lightmode {
     --ms-btn-border: #d0d7de;
-    /* GitHub Light border */
     --ms-btn-fg: #24292f;
-    /* GitHub Light text */
     --ms-btn-hover-bg: #f6f8fa;
-    /* sanfter Hover */
     --ms-btn-active-bg: #eaeef2;
-    /* Active */
 }
 
-/* Optional: gleiche Höhe wie das Suchfeld (ästhetischer Align) */
 .ms-dropdown .ms-select-all,
 .ms-dropdown .ms-clear {
     height: 32px;
 }
 
-/* --- 1) Checkmark im Lightmode dunkel --- */
 .lightmode .ms-dropdown .ms-list .form-check-input:checked+.form-check-label::after {
-    /* dunkler GitHub-Text (#1f2328) als Haken */
     background-image: url("data:image/svg+xml,%3csvg width='16' height='16' xmlns='http://www.w3.org/2000/svg'%3e%3cpath fill='%231f2328' d='M6.173 12.727L1.89 8.444l1.06-1.06 3.223 3.222 6.878-6.879 1.06 1.06z'/%3e%3c/svg%3e") !important;
     opacity: 1;
 }
 
-/* Safety: Sicherstellen, dass der Haken in allen Modi sichtbar bleibt */
 .ms-dropdown .ms-list .form-check-input:checked+.form-check-label::after {
     opacity: 1;
 }
 
-/* --- 2) Linken “Strich”/Outline beim Selektieren/Fokus verhindern --- */
-
-/* Niemals linke Border anzeigen */
 .ms-dropdown .ms-list .form-check {
     border-left: none !important;
 }
 
-/* Auch im Hover/Active/Checked-Zustand keine linke Border/Outline */
 .ms-dropdown .ms-list .form-check:hover,
 .ms-dropdown .ms-list .form-check:active {
     border-left: none !important;
 }
 
-/* Fokus-Outline innerhalb der Listeneinträge deaktivieren */
 .ms-dropdown .ms-list .form-check:focus,
 .ms-dropdown .ms-list .form-check:focus-visible,
 .ms-dropdown .ms-list .form-check-label:focus,
@@ -871,13 +819,11 @@ body:not(.lightmode) .ms-dropdown .dropdown-toggle {
     box-shadow: none !important;
 }
 
-/* Falls irgendwo doch ein farbiger Rand herkommt (Browser/BS5), neutralisieren */
 .ms-dropdown .ms-list .form-check,
 .ms-dropdown .ms-list .form-check * {
     border-color: transparent !important;
 }
 
-/* --- Immer rotes X statt BS-Ausrufezeichen (auch ohne Fokus) --- */
 .form-control.textbox.is-invalid,
 .textbox.is-invalid {
     background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='%23dc3545' viewBox='0 0 12 12'%3e%3cpath d='M6.707 6l3.647-3.646-.707-.708L6 5.293 2.354 1.646l-.708.708L5.293 6l-3.647 3.646.708.708L6 6.707l3.646 3.647.708-.708L6.707 6z'/%3e%3c/svg%3e") !important;
@@ -891,7 +837,6 @@ body:not(.lightmode) .ms-dropdown .dropdown-toggle {
     background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='%23dc3545' viewBox='0 0 12 12'%3e%3cpath d='M6.707 6l3.647-3.646-.707-.708L6 5.293 2.354 1.646l-.708.708L5.293 6l-3.647 3.646.708.708L6 6.707l3.646 3.647.708-.708L6.707 6z'/%3e%3c/svg%3e") !important;
 }
 
-/* --- Dünner grüner Haken (immer gleich, auch bei Fokus) --- */
 .form-control.textbox.is-valid,
 .textbox.is-valid {
     border-color: #198754;
@@ -904,13 +849,9 @@ body:not(.lightmode) .ms-dropdown .dropdown-toggle {
 
 .form-control.textbox.is-valid:focus,
 .textbox.is-valid:focus {
-    /* identisches (dünnes) Icon – kein Umspringen mehr */
     background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3e%3cpath d='M2 6l2.5 2.5L10 3.5' stroke='%23198754' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3e%3c/svg%3e") !important;
 }
 
-/* --- Validierungsstyles in Dropdowns/Checkboxlisten neutralisieren --- */
-
-/* Borders/Icons neutralisieren */
 .was-validated .ms-dropdown .form-check-input:valid,
 .was-validated .ms-dropdown .form-check-input:invalid,
 .ms-dropdown .form-check-input.is-valid,
@@ -918,10 +859,8 @@ body:not(.lightmode) .ms-dropdown .dropdown-toggle {
     border-color: var(--gh-border, var(--border-color)) !important;
     box-shadow: none !important;
     background-image: none !important;
-    /* kein grüner/roter Icon */
 }
 
-/* Label-Farbe neutral halten (nicht grün/rot einfärben) */
 .was-validated #tests-list .form-check-input:valid~.form-check-label,
 .was-validated #tests-list .form-check-input:invalid~.form-check-label,
 #tests-list .form-check-input.is-valid~.form-check-label,
@@ -933,24 +872,19 @@ body:not(.lightmode) .ms-dropdown .dropdown-toggle {
     color: var(--text-color) !important;
 }
 
-/* Für Sicherheit: Fokus/Outline in den Menüs dezent lassen */
 .was-validated .ms-dropdown .form-check-input:focus,
 .was-validated #tests-list .form-check-input:focus {
     box-shadow: 0 0 0 3px rgba(9, 105, 218, .0) !important;
-    /* kein extra Ring */
 }
 
-/* ==== Einheitliches Fokus-Verhalten (immer blau) ==== */
 .form-control.textbox:focus,
 .textbox:focus {
     border-color: #0969da !important;
     box-shadow: 0 0 0 1px #0969da !important;
     background-color: var(--base-color) !important;
-    /* Dark-Mode-Consistency */
     color: var(--text-color) !important;
 }
 
-/* Bootstrap-Validierungs-Glows auf Fokus neutralisieren */
 .was-validated .form-control:valid:focus,
 .form-control.is-valid:focus,
 .was-validated .form-control:invalid:focus,
@@ -960,7 +894,6 @@ body:not(.lightmode) .ms-dropdown .dropdown-toggle {
     /* kein grüner/roter Glow */
 }
 
-/* Optional: auch im nicht-fokussierten Zustand keinen extra Glow */
 .was-validated .form-control:valid,
 .form-control.is-valid,
 .was-validated .form-control:invalid,
@@ -968,7 +901,6 @@ body:not(.lightmode) .ms-dropdown .dropdown-toggle {
     box-shadow: none !important;
 }
 
-/* ==== Dark-Mode Anpassungen für Inputs & Prefix "Min % / Max %" ==== */
 body:not(.lightmode) .form-control.textbox {
     background-color: var(--base-color) !important;
     color: var(--text-color) !important;
@@ -979,21 +911,18 @@ body:not(.lightmode) .form-control.textbox::placeholder {
     color: rgba(224, 224, 224, .7);
 }
 
-/* Input-Group Label (Prefix) angleichen */
 body:not(.lightmode) .input-group-text {
     background-color: var(--base-color) !important;
     color: var(--text-color) !important;
     border-color: var(--border-color) !important;
 }
 
-/* Lightmode Pendant für Konsistenz */
 .lightmode .input-group-text {
     background-color: var(--base-color) !important;
     color: var(--text-color) !important;
     border-color: var(--border-color) !important;
 }
 
-/* (Optional) Nummernspinner im Darkmode angenehmer darstellen */
 body:not(.lightmode) input[type="number"].textbox::-webkit-outer-spin-button,
 body:not(.lightmode) input[type="number"].textbox::-webkit-inner-spin-button {
     filter: invert(1) brightness(0.9);
@@ -1009,24 +938,15 @@ body:not(.lightmode) input[type="number"].textbox::-webkit-inner-spin-button {
     box-shadow: none !important;
     outline: none !important;
     background-color: inherit !important;
-    /* keine Farbwechsel */
 }
 
-/* =========================
-   Code blocks (IDMOD-like) – Dark/Light compatible
-   ========================= */
-
-/* Base (Dark mode by default using your variables) */
 .container pre {
     position: relative;
     background: var(--base-variant) !important;
-    /* override any .bg-dark */
     color: var(--text-color) !important;
-    /* override .text-light */
     border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 14px 16px !important;
-    /* override .p-3 */
     overflow: auto;
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
@@ -1041,7 +961,6 @@ body:not(.lightmode) input[type="number"].textbox::-webkit-inner-spin-button {
     white-space: pre;
 }
 
-/* Copy button – dark mode by default */
 .copy-btn {
     position: absolute;
     top: 8px;
@@ -1089,9 +1008,6 @@ body:not(.lightmode) input[type="number"].textbox::-webkit-inner-spin-button {
     color: #1a7f37;
 }
 
-/* ===== Dark mode compatibility patch (no lightmode changes) ===== */
-
-/* List groups (Bootstrap defaults are light; override only in dark mode) */
 body:not(.lightmode) .list-group,
 body:not(.lightmode) .list-group-item {
   background-color: var(--base-color) !important;
@@ -1102,15 +1018,13 @@ body:not(.lightmode) .list-group-item + .list-group-item {
   border-top-color: var(--border-color) !important;
 }
 
-/* Headings inside list items */
 body:not(.lightmode) .list-group-item h5,
 body:not(.lightmode) .list-group-item p {
   color: var(--text-color) !important;
 }
 
-/* Links (keep accessible contrast in dark; lightmode remains unchanged) */
 body:not(.lightmode) a {
-  color: #66a6ff;                /* subtle blue on dark */
+  color: #66a6ff;           
   text-decoration-color: rgba(102, 166, 255, 0.5);
 }
 body:not(.lightmode) a:hover,
@@ -1119,7 +1033,6 @@ body:not(.lightmode) a:focus {
   text-decoration-color: rgba(155, 193, 255, 0.8);
 }
 
-/* List markers for <ol>/<ul> in container (so bullets/numbers aren’t too dim) */
 body:not(.lightmode) .container ol,
 body:not(.lightmode) .container ul {
   color: var(--text-color) !important;
@@ -1128,19 +1041,16 @@ body:not(.lightmode) .container ol li::marker {
   color: var(--text-color);
 }
 
-/* Bootstrap card/list-group bleed fixes inside dark containers */
 body:not(.lightmode) .list-group-item.border-0 {
   border-color: transparent !important;
 }
 
-/* Code blocks already themed, but make sure utility classes don’t leak */
 body:not(.lightmode) pre.bg-dark,
 body:not(.lightmode) code.bg-dark {
   background-color: var(--base-variant) !important;
   color: var(--text-color) !important;
 }
 
-/* Buttons that might inherit Bootstrap defaults in dark */
 body:not(.lightmode) .btn {
   color: var(--button-text-color);
   border-color: var(--border-color);
@@ -1149,7 +1059,6 @@ body:not(.lightmode) .btn:focus-visible {
   box-shadow: 0 0 0 3px rgba(9,105,218,.35) !important;
 }
 
-/* Navbar link active/hover edge cases */
 body:not(.lightmode) .navbar .nav-link,
 body:not(.lightmode) .navbar .navbar-brand {
   color: var(--text-color) !important;
@@ -1158,14 +1067,12 @@ body:not(.lightmode) .navbar .nav-link:hover {
   color: rgba(224,224,224,.85) !important;
 }
 
-/* Dropdown item hover contrast tweak (keeps your bg rules) */
 body:not(.lightmode) .dropdown-item:hover,
 body:not(.lightmode) .dropdown-item:focus {
   background-color: var(--base-variant) !important;
   color: var(--text-color) !important;
 }
 
-/* Horizontal rules created by borders in components */
 body:not(.lightmode) .border,
 body:not(.lightmode) .border-top,
 body:not(.lightmode) .border-bottom {

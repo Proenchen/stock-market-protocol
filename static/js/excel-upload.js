@@ -87,7 +87,7 @@ if (form) {
 
     const readNum = (el) => {
         const v = el.value.trim();
-        if (v === '') return null; // leer = kein Filter
+        if (v === '') return null; 
         const num = Number(v);
         return Number.isFinite(num) ? num : null;
     };
@@ -112,7 +112,6 @@ if (form) {
     };
 
     function validateOnSubmit() {
-        // Reset
         clearVisual(minEl);
         clearVisual(maxEl);
         rangeFb.textContent = '';
@@ -124,7 +123,6 @@ if (form) {
         const minVal = readNum(minEl);
         const maxVal = readNum(maxEl);
 
-        // Bereichsprüfung (0..100) pro Feld
         if (minVal !== null && (minVal < 0 || minVal > 100)) {
             ok = false;
             setInvalidVisual(minEl);
@@ -136,7 +134,6 @@ if (form) {
             msgs.push('Max has to be between 0 and 100.');
         }
 
-        // Paarregel
         if (ok && minVal !== null && maxVal !== null && minVal > maxVal) {
             ok = false;
             setInvalidVisual(minEl);
@@ -145,15 +142,10 @@ if (form) {
         }
 
         if (!ok) {
-            // Eine gemeinsame Meldung
             rangeFb.textContent = msgs.join(' ');
-            // Damit Bootstrap sie zeigt
             rangeFb.style.display = 'block';
-            // dem Browser mitteilen, dass das Feldset ungültig ist
-            // (wir hängen die "Ungültigkeit" an beide Inputs, reicht aber an einem)
             minEl.setCustomValidity('invalid');
         } else {
-            // optisches Grün nur, wenn befüllt
             setValidIfFilled(minEl);
             setValidIfFilled(maxEl);
             minEl.setCustomValidity('');

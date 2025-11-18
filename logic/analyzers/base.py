@@ -8,18 +8,8 @@ import pandas as pd
 
 @dataclass
 class SharedContext:
-    """Container for shared datasets used by analyzers.
-
-    Attributes
-    ----------
-    crsp : pd.DataFrame
-        The main CRSP-like security-level panel (e.g., prices/returns).
-    factors : pd.DataFrame
-        Factor returns (e.g., Fama-French, momentum, etc.).
-    fm : pd.DataFrame
-        Cross-sectional or time-series regression outputs (Fama-MacBeth or similar).
-    """
-
+    """Container for shared datasets used by analyzers."""
+    
     crsp: pd.DataFrame
     factors: pd.DataFrame
     fm: pd.DataFrame
@@ -45,10 +35,10 @@ class AnalyzerOutput:
         Optional metadata for programmatic consumers (e.g., summary stats).
     """
 
-    name: str  # Display name in the protocol/log
-    raw_texts: Dict[str, str]  # filename -> content
-    latex_blocks: List[str]  # LaTeX blocks appearing in order in the report
-    meta: Dict[str, Any] | None = None  # Optional metadata
+    name: str  
+    raw_texts: Dict[str, str]  
+    latex_blocks: List[str]  
+    meta: Dict[str, Any] | None = None  
 
 
 class BaseAnalyzer(ABC):
