@@ -72,6 +72,15 @@ Visit [http://127.0.0.1:5000](http://127.0.0.1:5000) in your browser to start us
 
 ---
 
+## 📸​ Screenshots
+
+Below is a screenshot of the webpage for test configuration and execution:
+
+<img width="1628" height="877" alt="grafik" src="https://github.com/user-attachments/assets/38009e7e-5419-4f8f-96e9-266f3ad90b50" />
+
+
+---
+
 ## 🧩 Troubleshooting
 
 If you encounter any issues or bugs, please create an issue on the [GitHub Issues page](https://github.com/Proenchen/stock-market-protocol/issues).
